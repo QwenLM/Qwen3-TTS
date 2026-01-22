@@ -82,6 +82,17 @@ else
 fi
 
 echo ""
+echo "=== Downloading 0.6B Model Weights (1.83 GB) ==="
+mkdir -p "${TEST_DATA_DIR}/model"
+if [ -f "${TEST_DATA_DIR}/model/model.safetensors" ]; then
+    echo "  model.safetensors already exists, skipping..."
+else
+    echo "  Downloading model.safetensors (this may take several minutes)..."
+    curl -L --progress-bar "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-Base/resolve/main/model.safetensors" \
+        -o "${TEST_DATA_DIR}/model/model.safetensors"
+fi
+
+echo ""
 echo "=== Download Summary ==="
 echo "Text tokenizer:"
 ls -lh "${TEST_DATA_DIR}/tokenizer/"
@@ -91,5 +102,8 @@ ls -lh "${TEST_DATA_DIR}/speech_tokenizer/"
 echo ""
 echo "Model config:"
 ls -lh "${TEST_DATA_DIR}/model_config/"
+echo ""
+echo "0.6B Model:"
+ls -lh "${TEST_DATA_DIR}/model/"
 echo ""
 echo "Done! Run 'cargo test' to execute tests with real weights."

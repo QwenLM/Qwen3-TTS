@@ -845,3 +845,318 @@ mod model_config_tests {
         assert!(our_config.max_new_tokens > 0);
     }
 }
+
+/// Tests for the 0.6B model weights
+mod model_weights_tests {
+    use std::path::Path;
+    use std::collections::HashMap;
+
+    const MODEL_DIR: &str = "test_data/model";
+
+    fn model_available() -> bool {
+        Path::new(MODEL_DIR).join("model.safetensors").exists()
+    }
+
+    #[test]
+    fn test_model_loading() {
+        if !model_available() {
+            eprintln!("Skipping test_model_loading: model weights not found");
+            eprintln!("Download with: curl -L https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-Base/resolve/main/model.safetensors -o test_data/model/model.safetensors");
+            return;
+        }
+
+        use candle_core::Device;
+
+        let model_path = Path::new(MODEL_DIR).join("model.safetensors");
+        let device = Device::Cpu;
+
+        let tensors = candle_core::safetensors::load(&model_path, &device).unwrap();
+        println!("Loaded {} tensors from 0.6B model", tensors.len());
+
+        assert!(!tensors.is_empty());
+    }
+
+    #[test]
+    fn test_model_tensor_groups() {
+        if !model_available() {
+            eprintln!("Skipping test_model_tensor_groups: model weights not found");
+            return;
+        }
+
+        use safetensors::SafeTensors;
+
+        let model_path = Path::new(MODEL_DIR).join("model.safetensors");
+        let model_bytes = std::fs::read(&model_path).unwrap();
+        let tensors = SafeTensors::deserialize(&model_bytes).unwrap();
+
+        // Group tensors by top-level component
+        let mut groups: HashMap<String, Vec<String>> = HashMap::new();
+        for name in tensors.names() {
+            let prefix = name.split('.').next().unwrap_or(name).to_string();
+            groups.entry(prefix).or_default().push(name.clone());
+        }
+
+        println!("Model tensor groups:");
+        for (prefix, names) in &groups {
+            println!("  {}: {} tensors", prefix, names.len());
+        }
+
+        // 0.6B model should have talker and speaker_encoder components
+        assert!(groups.contains_key("talker"), "Should have talker weights");
+    }
+
+    #[test]
+    fn test_talker_layer_structure() {
+        if !model_available() {
+            eprintln!("Skipping test_talker_layer_structure: model weights not found");
+            return;
+        }
+
+        use safetensors::SafeTensors;
+
+        let model_path = Path::new(MODEL_DIR).join("model.safetensors");
+        let model_bytes = std::fs::read(&model_path).unwrap();
+        let tensors = SafeTensors::deserialize(&model_bytes).unwrap();
+
+        // Explore talker structure - find unique 2nd-level prefixes
+        let mut sub_components: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for name in tensors.names() {
+            if name.starts_with("talker.") {
+                let parts: Vec<&str> = name.split('.').collect();
+                if parts.len() >= 2 {
+                    sub_components.insert(parts[1].to_string());
+                }
+            }
+        }
+
+        println!("Talker sub-components: {:?}", sub_components);
+
+        // Find layer tensors - the model uses "talker.model.layers." structure
+        let layer_tensors: Vec<&String> = tensors.names()
+            .iter()
+            .filter(|n| n.contains(".layers."))
+            .cloned()
+            .collect();
+
+        // Count unique layer indices
+        let mut layer_indices: std::collections::HashSet<usize> = std::collections::HashSet::new();
+        for name in &layer_tensors {
+            // Extract layer number from paths like "talker.model.layers.0.self_attn..."
+            for part in name.split('.') {
+                if let Ok(idx) = part.parse::<usize>() {
+                    layer_indices.insert(idx);
+                    break;
+                }
+            }
+        }
+
+        println!("Found {} layers", layer_indices.len());
+        if !layer_indices.is_empty() {
+            println!("Layer range: 0..{}", layer_indices.iter().max().unwrap());
+        }
+
+        // Print sample layer tensor names
+        println!("Sample layer tensors:");
+        for name in layer_tensors.iter().take(5) {
+            println!("  {}", name);
+        }
+
+        // Model should have transformer layers
+        assert!(!layer_indices.is_empty(), "Should have transformer layers");
+    }
+
+    #[test]
+    fn test_embedding_dimensions() {
+        if !model_available() {
+            eprintln!("Skipping test_embedding_dimensions: model weights not found");
+            return;
+        }
+
+        use safetensors::SafeTensors;
+
+        let model_path = Path::new(MODEL_DIR).join("model.safetensors");
+        let model_bytes = std::fs::read(&model_path).unwrap();
+        let tensors = SafeTensors::deserialize(&model_bytes).unwrap();
+
+        // Find embedding tensor
+        let embed_names: Vec<&String> = tensors.names()
+            .iter()
+            .filter(|n| n.contains("embed") && n.contains("token"))
+            .cloned()
+            .collect();
+
+        println!("Embedding tensors:");
+        for name in &embed_names {
+            let tensor = tensors.tensor(name).unwrap();
+            println!("  {}: {:?}", name, tensor.shape());
+        }
+
+        // Check text embedding dimensions match config
+        // vocab_size should be large (151k+), hidden_size should be 1024
+        if let Some(embed_name) = embed_names.iter().find(|n| n.contains("text")) {
+            let tensor = tensors.tensor(embed_name).unwrap();
+            let shape = tensor.shape();
+            assert!(shape.len() == 2, "Embedding should be 2D");
+            assert!(shape[0] > 150000, "Vocab size should be > 150k");
+            assert_eq!(shape[1], 1024, "Hidden size should be 1024");
+        }
+    }
+
+    #[test]
+    fn test_attention_head_dimensions() {
+        if !model_available() {
+            eprintln!("Skipping test_attention_head_dimensions: model weights not found");
+            return;
+        }
+
+        use safetensors::SafeTensors;
+
+        let model_path = Path::new(MODEL_DIR).join("model.safetensors");
+        let model_bytes = std::fs::read(&model_path).unwrap();
+        let tensors = SafeTensors::deserialize(&model_bytes).unwrap();
+
+        // Check first layer's attention weights (path is talker.model.layers.X...)
+        let q_proj = tensors.tensor("talker.model.layers.0.self_attn.q_proj.weight");
+        let k_proj = tensors.tensor("talker.model.layers.0.self_attn.k_proj.weight");
+        let v_proj = tensors.tensor("talker.model.layers.0.self_attn.v_proj.weight");
+
+        if let (Ok(q), Ok(k), Ok(v)) = (q_proj, k_proj, v_proj) {
+            println!("Attention projection shapes:");
+            println!("  q_proj: {:?}", q.shape());
+            println!("  k_proj: {:?}", k.shape());
+            println!("  v_proj: {:?}", v.shape());
+
+            // Actual shapes from 0.6B model:
+            // q_proj: [2048, 1024] - 32 query heads * 64 head_dim (interleaved with code groups)
+            // k_proj: [1024, 1024] - 16 kv heads * 64 head_dim
+            // v_proj: [1024, 1024] - 16 kv heads * 64 head_dim
+            // This suggests the model uses an expanded Q for handling multiple code groups
+            assert_eq!(q.shape()[1], 1024, "Q projection input should be 1024");
+            assert_eq!(k.shape()[1], 1024, "K projection input should be 1024");
+            assert_eq!(v.shape()[1], 1024, "V projection input should be 1024");
+
+            // Q is 2x K/V size (for 16 code groups interleaved with text)
+            assert_eq!(q.shape()[0], 2048, "Q projection output is 2048");
+            assert_eq!(k.shape()[0], 1024, "K projection output is 1024");
+            assert_eq!(v.shape()[0], 1024, "V projection output is 1024");
+        }
+    }
+
+    #[test]
+    fn test_speaker_encoder_weights() {
+        if !model_available() {
+            eprintln!("Skipping test_speaker_encoder_weights: model weights not found");
+            return;
+        }
+
+        use safetensors::SafeTensors;
+
+        let model_path = Path::new(MODEL_DIR).join("model.safetensors");
+        let model_bytes = std::fs::read(&model_path).unwrap();
+        let tensors = SafeTensors::deserialize(&model_bytes).unwrap();
+
+        // Find speaker encoder tensors
+        let speaker_tensors: Vec<&String> = tensors.names()
+            .iter()
+            .filter(|n| n.contains("speaker"))
+            .cloned()
+            .collect();
+
+        println!("Speaker encoder tensors: {}", speaker_tensors.len());
+        for name in speaker_tensors.iter().take(10) {
+            let tensor = tensors.tensor(name).unwrap();
+            println!("  {}: {:?}", name, tensor.shape());
+        }
+
+        assert!(!speaker_tensors.is_empty(), "Should have speaker encoder weights");
+    }
+
+    #[test]
+    fn test_code_embeddings() {
+        if !model_available() {
+            eprintln!("Skipping test_code_embeddings: model weights not found");
+            return;
+        }
+
+        use safetensors::SafeTensors;
+
+        let model_path = Path::new(MODEL_DIR).join("model.safetensors");
+        let model_bytes = std::fs::read(&model_path).unwrap();
+        let tensors = SafeTensors::deserialize(&model_bytes).unwrap();
+
+        // Find code embedding tensors (for audio tokens)
+        let code_embed_names: Vec<&String> = tensors.names()
+            .iter()
+            .filter(|n| n.contains("code") && n.contains("embed"))
+            .cloned()
+            .collect();
+
+        println!("Code embedding tensors:");
+        for name in &code_embed_names {
+            let tensor = tensors.tensor(name).unwrap();
+            println!("  {}: {:?}", name, tensor.shape());
+        }
+
+        // Should have code embeddings for the 16 codec groups
+        assert!(!code_embed_names.is_empty(), "Should have code embeddings");
+    }
+
+    #[test]
+    fn test_lm_head_dimensions() {
+        if !model_available() {
+            eprintln!("Skipping test_lm_head_dimensions: model weights not found");
+            return;
+        }
+
+        use safetensors::SafeTensors;
+
+        let model_path = Path::new(MODEL_DIR).join("model.safetensors");
+        let model_bytes = std::fs::read(&model_path).unwrap();
+        let tensors = SafeTensors::deserialize(&model_bytes).unwrap();
+
+        // Find LM head / output projection
+        let lm_head_names: Vec<&String> = tensors.names()
+            .iter()
+            .filter(|n| n.contains("lm_head") || n.contains("output"))
+            .cloned()
+            .collect();
+
+        println!("LM head tensors:");
+        for name in &lm_head_names {
+            let tensor = tensors.tensor(name).unwrap();
+            println!("  {}: {:?}", name, tensor.shape());
+        }
+    }
+
+    #[test]
+    fn test_load_tensors_to_candle() {
+        if !model_available() {
+            eprintln!("Skipping test_load_tensors_to_candle: model weights not found");
+            return;
+        }
+
+        use candle_core::Device;
+
+        let model_path = Path::new(MODEL_DIR).join("model.safetensors");
+        let device = Device::Cpu;
+
+        // Load all tensors
+        let tensors = candle_core::safetensors::load(&model_path, &device).unwrap();
+
+        // Verify we can access key tensors (path is talker.model.layers.X...)
+        let key_tensors = [
+            "talker.model.layers.0.self_attn.q_proj.weight",
+            "talker.model.layers.0.mlp.gate_proj.weight",
+            "talker.model.norm.weight",
+        ];
+
+        for name in &key_tensors {
+            if let Some(tensor) = tensors.get(*name) {
+                println!("{}: {:?} {:?}", name, tensor.dims(), tensor.dtype());
+                assert!(!tensor.dims().is_empty());
+            }
+        }
+
+        println!("\nSuccessfully loaded {} tensors to Candle", tensors.len());
+    }
+}
