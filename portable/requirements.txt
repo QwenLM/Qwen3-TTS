@@ -1,0 +1,21 @@
+# Qwen3-TTS Portable - Зависимости
+# PyTorch устанавливается отдельно через install.bat
+
+# Основные зависимости Qwen3-TTS
+transformers==4.57.3
+accelerate==1.12.0
+einops
+onnxruntime
+
+# Аудио обработка
+librosa
+soundfile
+torchaudio
+
+# Веб-интерфейс
+gradio
+
+# Утилиты
+numpy
+huggingface_hub
+safetensors
