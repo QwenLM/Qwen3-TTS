@@ -50,6 +50,7 @@ def main():
             for code, line in zip(enc_res.audio_codes, batch_lines):
                 line['audio_codes'] = code.cpu().tolist()
                 final_lines.append(line)
+            del enc_res
             batch_lines.clear()
             batch_audios.clear()
 
@@ -58,6 +59,7 @@ def main():
         for code, line in zip(enc_res.audio_codes, batch_lines):
             line['audio_codes'] = code.cpu().tolist()
             final_lines.append(line)
+        del enc_res
         batch_lines.clear()
         batch_audios.clear()
 
