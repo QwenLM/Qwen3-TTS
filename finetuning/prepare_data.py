@@ -56,7 +56,9 @@ def main():
         for code, line in zip(enc_res.audio_codes, batch_lines):
             line['audio_codes'] = code.cpu().tolist()
             final_lines.append(line)
-
+        batch_lines = []
+        batch_audios = []
+        
     final_lines = [json.dumps(line, ensure_ascii=False) for line in final_lines]
 
     with open(args.output_jsonl, 'w') as f:
