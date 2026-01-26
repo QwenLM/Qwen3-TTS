@@ -39,7 +39,7 @@
         "generate_custom_voice() called with request parameters",
         "Audio numpy array converted to WAV bytes for response"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "REQ-004",

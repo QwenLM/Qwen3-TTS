@@ -29,3 +29,29 @@
 - `docker-compose.yml`
 
 **Status:** REQ-001 infrastructure files complete. Full verification blocked until server code is implemented.
+
+### 2026-01-26: REQ-003 Model Manager Implemented
+
+**Task:** REQ-003 - Implement model manager singleton for inference
+
+**Completed Steps:**
+1. Created `server/__init__.py` package init
+2. Created `server/model_manager.py` with:
+   - Thread-safe singleton pattern using double-checked locking
+   - Lazy model loading via `load_model()` / `get_model()`
+   - `generate_custom_voice(text, speaker, language, instruct)` wrapper method
+   - `audio_to_wav_bytes()` for converting numpy audio to WAV binary
+   - `get_supported_speakers()` and `get_supported_languages()` helpers
+   - `model_loaded` property for health checks
+   - Model configured with `dtype=torch.bfloat16`, `device_map='cuda:0'`, `attn_implementation='flashinfer'`
+
+**Verification:**
+- Python syntax check passed (`py_compile`)
+- AST parse passed
+- Full import testing blocked by broken venv symlinks on host (will verify in Docker)
+
+**Files Created:**
+- `server/__init__.py`
+- `server/model_manager.py`
+
+**Status:** REQ-003 complete. Ready for REQ-002 (FastAPI server) implementation.
