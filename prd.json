@@ -1,0 +1,137 @@
+{
+  "project": "Qwen3-TTS REST API Server",
+  "target_client": "Meta Quest",
+  "server_hardware": "NVIDIA DGX Spark",
+  "inference_backend": "FlashInfer",
+  "requirements": [
+    {
+      "id": "REQ-001",
+      "category": "infrastructure",
+      "description": "Create Docker container that loads and serves the Qwen3-TTS model on DGX Spark",
+      "steps": [
+        "Create Dockerfile with CUDA support, FlashInfer backend, and Python dependencies",
+        "Create docker-compose.yml with GPU passthrough for DGX Spark",
+        "docker compose up launches container successfully",
+        "Model loads with attn_implementation=flashinfer backend"
+      ],
+      "passes": false
+    },
+    {
+      "id": "REQ-002",
+      "category": "functional",
+      "description": "Implement FastAPI server with TTS synthesis endpoint",
+      "steps": [
+        "Create server/fastapi_server.py with /v1/tts/synthesize POST endpoint",
+        "Endpoint accepts JSON: {text, speaker, language, instruct (optional)}",
+        "Endpoint returns audio/wav binary response",
+        "Server starts on port 8000 inside container"
+      ],
+      "passes": false
+    },
+    {
+      "id": "REQ-003",
+      "category": "functional",
+      "description": "Implement model manager singleton for inference",
+      "steps": [
+        "Create server/model_manager.py with lazy model loading",
+        "Load Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice with FlashInfer attention backend",
+        "Configure model with dtype=torch.bfloat16, device_map='cuda:0'",
+        "generate_custom_voice() called with request parameters",
+        "Audio numpy array converted to WAV bytes for response"
+      ],
+      "passes": false
+    },
+    {
+      "id": "REQ-004",
+      "category": "functional",
+      "description": "Implement health and metadata endpoints",
+      "steps": [
+        "GET /health returns {status: 'healthy', model_loaded: bool}",
+        "GET /v1/tts/speakers returns list of available speakers",
+        "GET /v1/tts/languages returns list of supported languages"
+      ],
+      "passes": false
+    },
+    {
+      "id": "REQ-005",
+      "category": "integration",
+      "description": "Verify container runs inference end-to-end",
+      "steps": [
+        "docker compose up and run basic_inference example in container successfully",
+        "docker compose up and hit /v1/tts/synthesize from host successfully",
+        "Returned audio plays correctly"
+      ],
+      "passes": false
+    },
+    {
+      "id": "REQ-006",
+      "category": "functional",
+      "description": "Ensure API is accessible from Meta Quest client",
+      "steps": [
+        "Server binds to 0.0.0.0 for external access",
+        "CORS enabled for cross-origin requests",
+        "Response Content-Type set to audio/wav",
+        "Container port 8000 exposed to host network"
+      ],
+      "passes": false
+    }
+  ],
+  "api_spec": {
+    "base_url": "http://<server_ip>:8000",
+    "endpoints": {
+      "POST /v1/tts/synthesize": {
+        "request": {
+          "content_type": "application/json",
+          "body": {
+            "text": "string (required)",
+            "speaker": "string (required) - e.g. 'Vivian', 'Ryan'",
+            "language": "string (required) - 'Chinese', 'English', or 'Auto'",
+            "instruct": "string (optional) - style instruction"
+          }
+        },
+        "response": {
+          "content_type": "audio/wav",
+          "body": "binary WAV audio data"
+        }
+      },
+      "GET /health": {
+        "response": {
+          "status": "string",
+          "model_loaded": "boolean"
+        }
+      },
+      "GET /v1/tts/speakers": {
+        "response": {
+          "speakers": ["array of strings"]
+        }
+      },
+      "GET /v1/tts/languages": {
+        "response": {
+          "languages": ["array of strings"]
+        }
+      }
+    }
+  },
+  "files_to_create": [
+    "Dockerfile",
+    "docker-compose.yml",
+    "server/fastapi_server.py",
+    "server/model_manager.py",
+    "requirements-server.txt"
+  ],
+  "dependencies": {
+    "python": "3.12",
+    "torch": ">=2.2.0",
+    "flashinfer": "latest (pip install flashinfer -i https://flashinfer.ai/whl/cu124/torch2.4/)",
+    "fastapi": ">=0.100.0",
+    "uvicorn": ">=0.23.0",
+    "soundfile": ">=0.12.0",
+    "qwen_tts": "local package"
+  },
+  "notes": [
+    "DGX Spark provides NVIDIA Grace Blackwell architecture",
+    "FlashInfer is required for optimized attention on this hardware",
+    "Model uses bfloat16 precision for optimal performance",
+    "Container must have access to GPU via NVIDIA Container Toolkit"
+  ]
+}
