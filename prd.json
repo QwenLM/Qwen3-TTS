@@ -87,7 +87,7 @@
         "Add optional instruct field for voice style customization",
         "UI calls backend /v1/tts/synthesize endpoint"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "REQ-008",

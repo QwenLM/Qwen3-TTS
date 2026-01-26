@@ -304,3 +304,34 @@ All verification steps passed:
 - `prd.json`
 
 **Status:** PRD updated. REQ-007 and REQ-008 ready for implementation (passes: false).
+
+### 2026-01-26: REQ-007 Streamlit Demo UI Implemented
+
+**Task:** REQ-007 - Implement Streamlit demo UI for testing TTS synthesis
+
+**Completed Steps:**
+1. Created `ui/streamlit_app.py` with:
+   - Speaker selection dropdown populated dynamically from `/v1/tts/speakers` API
+   - Text input area for synthesis text with default example
+   - Language selection dropdown populated dynamically from `/v1/tts/languages` API
+   - Audio playback in browser using `st.audio()` after synthesis
+   - Optional instruct field in "Advanced Options" expander for voice style customization
+   - UI calls backend `/v1/tts/synthesize` endpoint via requests library
+   - Health check status display in sidebar
+   - Download button for saving synthesized WAV audio
+   - Configurable API URL via `TTS_API_URL` environment variable
+
+**Features:**
+- Real-time API health check display
+- Form-based input with validation
+- Spinner feedback during synthesis
+- Error handling with user-friendly messages
+- Responsive layout with two-column speaker/language selection
+
+**Verification:**
+- Python syntax check passed (`py_compile`)
+
+**Files Created:**
+- `ui/streamlit_app.py`
+
+**Status:** REQ-007 complete. Streamlit demo UI ready for integration with backend.
