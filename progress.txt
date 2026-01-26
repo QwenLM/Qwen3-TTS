@@ -220,3 +220,53 @@ Run on a machine with full Docker installation (daemon + client) and GPU:
 ```
 
 **Status:** BLOCKED - Cannot complete verification without Docker daemon. All code and tooling is ready.
+
+### 2026-01-26: REQ-005 Complete - End-to-End Verification PASSED
+
+**Task:** REQ-005 - Verify container runs inference end-to-end
+
+**Changes Made to Enable Verification:**
+1. **Dockerfile** - Major rewrite for DGX Spark (Blackwell GPU sm_121) compatibility:
+   - Switched base image to `nvcr.io/nvidia/pytorch:25.01-py3` (NGC container with Blackwell support)
+   - Build torchaudio v2.6.0 from source (NGC torch 2.6.0a0 requires matching torchaudio)
+   - Use pip constraints to prevent PyPI torch from overwriting NGC's custom torch build
+   - Install gradio without torch dependency conflicts
+
+2. **model_manager.py** - Fixed attention implementation:
+   - Changed `attn_implementation="flashinfer"` to `attn_implementation="sdpa"`
+   - FlashInfer not supported by Qwen3-TTS model; SDPA (Scaled Dot Product Attention) works
+
+3. **verify_req005.sh** - Bug fixes:
+   - Fixed WAV header validation (check full RIFF signature `52494646` instead of partial `5249`)
+   - Updated test to use `sdpa` attention
+
+4. **requirements-server.txt** - Added dependencies:
+   - Pinned `transformers==4.57.3` and `accelerate==1.12.0`
+   - Added `librosa`, `einops`, `onnxruntime` for audio processing
+
+**Verification Results:**
+All verification steps passed:
+- [PASS] Docker container builds and starts
+- [PASS] Server becomes healthy
+- [PASS] Basic inference runs inside container
+- [PASS] /v1/tts/synthesize accessible from host
+- [PASS] Returned audio is valid WAV format
+
+**Test Output:**
+- `test_output_req005.wav` - 198,614 bytes
+- `test_output_full.wav` - 5.10 seconds audio at 24000Hz
+
+**API Endpoints Verified:**
+- `GET /health` - status=healthy, model_loaded=True
+- `GET /v1/tts/speakers` - Returns 9 speakers including vivian, ryan, etc.
+- `GET /v1/tts/languages` - Returns 11 languages including english, chinese, etc.
+- `POST /v1/tts/synthesize` - Returns valid WAV audio
+
+**Files Modified:**
+- `Dockerfile`
+- `server/model_manager.py`
+- `scripts/verify_req005.sh`
+- `requirements-server.txt`
+- `prd.json` (marked REQ-005 as passing)
+
+**Status:** REQ-005 COMPLETE. All end-to-end verification tests passed. All 6 PRD requirements now passing.
