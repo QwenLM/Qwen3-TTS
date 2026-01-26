@@ -156,3 +156,38 @@
 - `docker-compose.yml` - Removed obsolete version field
 
 **Status:** REQ-001 complete. All infrastructure files validated and ready for deployment.
+
+### 2026-01-26: REQ-005 Verification Script Created
+
+**Task:** REQ-005 - Verify container runs inference end-to-end
+
+**Work Completed:**
+1. Created `scripts/verify_req005.sh` - comprehensive verification script that:
+   - Checks prerequisites (Docker, NVIDIA Container Toolkit, GPU)
+   - Builds the Docker image
+   - Starts the container
+   - Waits for server health check to pass
+   - Runs basic inference test inside the container
+   - Tests `/v1/tts/synthesize` endpoint from host
+   - Validates returned WAV audio format
+   - Provides pass/fail summary for all verification steps
+
+**Verification Steps (per PRD):**
+1. "docker compose up and run basic_inference example in container successfully"
+   - Script runs inference test via `docker compose exec`
+2. "docker compose up and hit /v1/tts/synthesize from host successfully"
+   - Script calls API with curl and validates HTTP 200 response
+3. "Returned audio plays correctly"
+   - Script validates WAV header and file size
+   - Saves output files for manual audio playback verification
+
+**Files Created:**
+- `scripts/verify_req005.sh` - End-to-end verification script (executable)
+
+**To Complete REQ-005 Verification:**
+Run the verification script on a machine with Docker and GPU access:
+```bash
+./scripts/verify_req005.sh
+```
+
+**Status:** REQ-005 verification tooling complete. Manual verification required on hardware with Docker daemon and GPU. Run `./scripts/verify_req005.sh` to complete verification and mark as passing.
