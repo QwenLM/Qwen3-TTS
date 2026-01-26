@@ -73,7 +73,7 @@
         "Response Content-Type set to audio/wav",
         "Container port 8000 exposed to host network"
       ],
-      "passes": false
+      "passes": true
     }
   ],
   "api_spec": {

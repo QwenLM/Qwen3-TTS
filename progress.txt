@@ -101,3 +101,25 @@
 - Response model fields verified to match PRD spec via AST analysis
 
 **Status:** REQ-004 complete. All health and metadata endpoints implemented and verified.
+
+### 2026-01-26: REQ-006 Verified Complete
+
+**Task:** REQ-006 - Ensure API is accessible from Meta Quest client
+
+**Verification:**
+1. Server binds to 0.0.0.0 for external access:
+   - `server/fastapi_server.py:122`: `uvicorn.run(app, host="0.0.0.0", port=8000)`
+   - `Dockerfile:65`: `CMD ["python", "-m", "uvicorn", "server.fastapi_server:app", "--host", "0.0.0.0", "--port", "8000"]`
+2. CORS enabled for cross-origin requests:
+   - `server/fastapi_server.py:62-68`: CORSMiddleware with `allow_origins=["*"]`
+3. Response Content-Type set to audio/wav:
+   - `server/fastapi_server.py:114`: `Response(content=wav_bytes, media_type="audio/wav")`
+4. Container port 8000 exposed to host network:
+   - `docker-compose.yml:10`: `ports: - "8000:8000"`
+
+**Additional Work:**
+- Created `scripts/test_api.py` integration test script for API verification
+- Script tests all endpoints: /health, /v1/tts/speakers, /v1/tts/languages, /v1/tts/synthesize
+- Script validates WAV response format and saves output audio file
+
+**Status:** REQ-006 complete. All Meta Quest accessibility requirements implemented and verified.
