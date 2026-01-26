@@ -61,7 +61,7 @@
         "docker compose up and hit /v1/tts/synthesize from host successfully",
         "Returned audio plays correctly"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "REQ-006",

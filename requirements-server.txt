@@ -7,8 +7,18 @@ uvicorn[standard]>=0.23.0
 # Audio processing
 soundfile>=0.12.0
 
-# PyTorch (CUDA 12.4 compatible)
-torch>=2.2.0
+# Transformers (required for qwen_tts - pin to exact version specified in pyproject.toml)
+# Include vision extra for AutoProcessor support
+transformers[vision]==4.57.3
+accelerate==1.12.0
+
+# Additional audio dependencies for qwen_tts
+librosa
+einops
+onnxruntime
+
+# PyTorch (CUDA 12.4 compatible - provided by NGC container)
+# torch>=2.2.0
 
 # FlashInfer for optimized attention on DGX Spark
 # Install separately: pip install flashinfer -i https://flashinfer.ai/whl/cu124/torch2.4/

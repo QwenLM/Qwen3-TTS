@@ -127,7 +127,7 @@ tts = Qwen3TTSModel.from_pretrained(
     'Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice',
     device_map='cuda:0',
     dtype=torch.bfloat16,
-    attn_implementation='flashinfer',
+    attn_implementation='sdpa',
 )
 print('Model loaded successfully!')
 
@@ -174,10 +174,10 @@ if [ "$FILE_SIZE" -lt 44 ]; then
     exit 1
 fi
 
-# Check WAV header
+# Check WAV header (RIFF = 52 49 46 46)
 HEADER=$(xxd -l 4 "$OUTPUT_FILE" | awk '{print $2$3}')
-if [ "$HEADER" != "5249" ]; then  # "RI" in hex (RIFF)
-    log_error "Invalid WAV header"
+if [ "$HEADER" != "52494646" ]; then  # "RIFF" in hex
+    log_error "Invalid WAV header: expected 52494646 (RIFF), got $HEADER"
     exit 1
 fi
 

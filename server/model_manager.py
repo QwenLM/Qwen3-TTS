@@ -2,7 +2,7 @@
 Model manager singleton for Qwen3-TTS inference.
 
 Provides lazy loading of the Qwen3-TTS model with thread-safe singleton pattern.
-Configured for DGX Spark with FlashInfer attention backend.
+Configured for DGX Spark with SDPA (Scaled Dot Product Attention) backend.
 """
 
 import io
@@ -44,7 +44,7 @@ class ModelManager:
 
     def load_model(self) -> Qwen3TTSModel:
         """
-        Load the Qwen3-TTS model with FlashInfer backend.
+        Load the Qwen3-TTS model with SDPA attention backend.
 
         Uses lazy loading pattern - model is loaded on first call.
         Subsequent calls return the cached model instance.
@@ -59,7 +59,7 @@ class ModelManager:
                         "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
                         device_map="cuda:0",
                         dtype=torch.bfloat16,
-                        attn_implementation="flashinfer",
+                        attn_implementation="sdpa",
                     )
         return self._model
 

@@ -1,7 +1,8 @@
 # Qwen3-TTS REST API Server
-# Optimized for NVIDIA DGX Spark with FlashInfer attention backend
+# Optimized for NVIDIA DGX Spark with Blackwell GPU (sm_121) support
 
-FROM nvidia/cuda:12.4.1-devel-ubuntu22.04
+# Use NGC PyTorch container with Blackwell support
+FROM nvcr.io/nvidia/pytorch:25.01-py3
 
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
@@ -10,25 +11,13 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
-# Install system dependencies
+# Install additional system dependencies
 RUN apt-get update && apt-get install -y \
-    python3.12 \
-    python3.12-venv \
-    python3.12-dev \
-    python3-pip \
-    git \
-    curl \
     libsndfile1 \
     libsox-dev \
+    sox \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
-
-# Set Python 3.12 as default
-RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.12 1 \
-    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1
-
-# Upgrade pip
-RUN python -m pip install --upgrade pip
 
 # Set working directory
 WORKDIR /app
@@ -37,20 +26,27 @@ WORKDIR /app
 COPY requirements-server.txt .
 COPY pyproject.toml .
 
-# Install PyTorch with CUDA 12.4 support
-RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
-
-# Install FlashInfer for optimized attention on DGX Spark
-RUN pip install flashinfer -i https://flashinfer.ai/whl/cu124/torch2.4/
-
-# Install server dependencies
+# Install server dependencies (PyTorch already included in NGC container)
 RUN pip install -r requirements-server.txt
+
+# Build torchaudio from source (NGC's custom torch 2.6.0a0 needs matching torchaudio)
+# Using v2.6.0 branch, build wheel and install with --no-deps to skip version check
+RUN pip install sox && \
+    git clone --depth 1 --branch v2.6.0 https://github.com/pytorch/audio.git /tmp/torchaudio && \
+    cd /tmp/torchaudio && \
+    BUILD_SOX=0 USE_CUDA=1 python setup.py bdist_wheel && \
+    pip install --no-deps dist/*.whl && \
+    rm -rf /tmp/torchaudio
 
 # Copy the qwen_tts package
 COPY qwen_tts/ ./qwen_tts/
 
-# Install qwen_tts package in editable mode
-RUN pip install -e .
+# Install qwen_tts package WITHOUT reinstalling torch (NGC provides compatible version)
+# Use pip constraint to prevent PyPI torch from being installed over NGC's torch
+RUN echo "torch" > /tmp/constraints.txt && \
+    echo "torchvision" >> /tmp/constraints.txt && \
+    pip install -c /tmp/constraints.txt gradio && \
+    pip install -e . --no-deps
 
 # Copy server code
 COPY server/ ./server/
