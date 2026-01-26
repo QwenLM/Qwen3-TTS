@@ -26,7 +26,7 @@
         "Endpoint returns audio/wav binary response",
         "Server starts on port 8000 inside container"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "REQ-003",
