@@ -191,3 +191,32 @@ Run the verification script on a machine with Docker and GPU access:
 ```
 
 **Status:** REQ-005 verification tooling complete. Manual verification required on hardware with Docker daemon and GPU. Run `./scripts/verify_req005.sh` to complete verification and mark as passing.
+
+### 2026-01-26: REQ-005 Verification Attempted - Blocked by Environment
+
+**Task:** REQ-005 - Verify container runs inference end-to-end
+
+**Attempt:**
+1. Attempted to run `./scripts/verify_req005.sh` for end-to-end verification
+2. Docker client is installed (`docker --version` works) but Docker daemon (`dockerd`) is not available
+3. Error: "Cannot connect to the Docker daemon at unix:///var/run/docker.sock"
+
+**Environment Limitations:**
+- Only Docker client binary exists (`/usr/bin/docker`)
+- No Docker daemon (`dockerd`) binary found
+- No Docker socket (`/var/run/docker.sock`) exists
+- This appears to be a client-only Docker installation
+
+**Verification Still Required:**
+- All infrastructure files validated (Dockerfile, docker-compose.yml)
+- All Python code syntax validated (model_manager.py, fastapi_server.py)
+- `docker compose config` validates configuration successfully
+- Verification script exists and is ready to run
+
+**To Complete:**
+Run on a machine with full Docker installation (daemon + client) and GPU:
+```bash
+./scripts/verify_req005.sh
+```
+
+**Status:** BLOCKED - Cannot complete verification without Docker daemon. All code and tooling is ready.
