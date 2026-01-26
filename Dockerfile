@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y \
     python3.12-dev \
     python3-pip \
     git \
+    curl \
     libsndfile1 \
     libsox-dev \
     ffmpeg \

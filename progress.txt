@@ -123,3 +123,36 @@
 - Script validates WAV response format and saves output audio file
 
 **Status:** REQ-006 complete. All Meta Quest accessibility requirements implemented and verified.
+
+### 2026-01-26: REQ-001 Finalized and Verified
+
+**Task:** REQ-001 - Create Docker container that loads and serves the Qwen3-TTS model on DGX Spark
+
+**Changes Made:**
+1. Added `curl` to Dockerfile system dependencies (required for healthcheck)
+2. Removed obsolete `version: "3.8"` from docker-compose.yml
+
+**Verification:**
+1. `docker compose config` - Validated docker-compose.yml parses correctly with:
+   - GPU passthrough via NVIDIA Container Toolkit (`driver: nvidia`, `capabilities: [gpu]`)
+   - Port 8000 mapped to host
+   - HuggingFace cache volume mount
+   - Health check configuration with curl
+2. Dockerfile validation confirmed:
+   - CUDA 12.4.1 base image
+   - Python 3.12 with curl installed
+   - FlashInfer installation from cu124 wheel index
+   - PyTorch CUDA 12.4 support
+   - Server files copied and installed
+   - Uvicorn server CMD binding to 0.0.0.0:8000
+3. Model manager configuration verified:
+   - `attn_implementation="flashinfer"` backend
+   - `dtype=torch.bfloat16` precision
+   - `device_map="cuda:0"` GPU mapping
+4. Python syntax validation passed for all server files
+
+**Files Modified:**
+- `Dockerfile` - Added curl to apt-get install
+- `docker-compose.yml` - Removed obsolete version field
+
+**Status:** REQ-001 complete. All infrastructure files validated and ready for deployment.

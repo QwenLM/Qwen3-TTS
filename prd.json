@@ -14,7 +14,7 @@
         "docker compose up launches container successfully",
         "Model loads with attn_implementation=flashinfer backend"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "REQ-002",
