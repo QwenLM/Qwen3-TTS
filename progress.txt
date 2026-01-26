@@ -270,3 +270,37 @@ All verification steps passed:
 - `prd.json` (marked REQ-005 as passing)
 
 **Status:** REQ-005 COMPLETE. All end-to-end verification tests passed. All 6 PRD requirements now passing.
+
+### 2026-01-26: PRD Updated with Streamlit UI Requirements
+
+**Task:** Add Streamlit demo UI requirements to PRD
+
+**Changes Made:**
+1. Added **REQ-007** (ui category): Implement Streamlit demo UI for testing TTS synthesis
+   - Speaker selection dropdown
+   - Text input area for synthesis
+   - Language selection dropdown
+   - Audio playback in browser after synthesis
+   - Optional instruct field for voice style customization
+   - UI calls backend /v1/tts/synthesize endpoint
+
+2. Added **REQ-008** (infrastructure category): Add Streamlit UI container to docker-compose
+   - Create ui/Dockerfile for Streamlit container
+   - Create ui/requirements.txt with streamlit, requests dependencies
+   - Add streamlit-ui service to docker-compose.yml
+   - Configure service to connect to qwen3-tts-server backend
+   - Expose Streamlit on port 8501
+
+3. Updated **files_to_create** array with:
+   - `ui/streamlit_app.py`
+   - `ui/Dockerfile`
+   - `ui/requirements.txt`
+
+4. Updated **dependencies** section with:
+   - `streamlit`: ">=1.30.0"
+   - `requests`: ">=2.31.0"
+
+**Files Modified:**
+- `prd.json`
+
+**Status:** PRD updated. REQ-007 and REQ-008 ready for implementation (passes: false).

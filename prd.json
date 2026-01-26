@@ -74,6 +74,33 @@
         "Container port 8000 exposed to host network"
       ],
       "passes": true
+    },
+    {
+      "id": "REQ-007",
+      "category": "ui",
+      "description": "Implement Streamlit demo UI for testing TTS synthesis",
+      "steps": [
+        "Create ui/streamlit_app.py with speaker selection dropdown",
+        "Add text input area for synthesis text",
+        "Add language selection dropdown",
+        "Implement audio playback in browser after synthesis",
+        "Add optional instruct field for voice style customization",
+        "UI calls backend /v1/tts/synthesize endpoint"
+      ],
+      "passes": false
+    },
+    {
+      "id": "REQ-008",
+      "category": "infrastructure",
+      "description": "Add Streamlit UI container to docker-compose",
+      "steps": [
+        "Create ui/Dockerfile for Streamlit container",
+        "Create ui/requirements.txt with streamlit, requests dependencies",
+        "Add streamlit-ui service to docker-compose.yml",
+        "Configure service to connect to qwen3-tts-server backend",
+        "Expose Streamlit on port 8501"
+      ],
+      "passes": false
     }
   ],
   "api_spec": {
@@ -117,7 +144,10 @@
     "docker-compose.yml",
     "server/fastapi_server.py",
     "server/model_manager.py",
-    "requirements-server.txt"
+    "requirements-server.txt",
+    "ui/streamlit_app.py",
+    "ui/Dockerfile",
+    "ui/requirements.txt"
   ],
   "dependencies": {
     "python": "3.12",
@@ -126,7 +156,9 @@
     "fastapi": ">=0.100.0",
     "uvicorn": ">=0.23.0",
     "soundfile": ">=0.12.0",
-    "qwen_tts": "local package"
+    "qwen_tts": "local package",
+    "streamlit": ">=1.30.0",
+    "requests": ">=2.31.0"
   },
   "notes": [
     "DGX Spark provides NVIDIA Grace Blackwell architecture",
