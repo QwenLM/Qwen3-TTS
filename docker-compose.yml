@@ -1,0 +1,31 @@
+version: "3.8"
+
+services:
+  qwen3-tts-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: qwen3-tts-server
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount HuggingFace cache for model persistence
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CUDA_VISIBLE_DEVICES=0
+      - HF_HOME=/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s

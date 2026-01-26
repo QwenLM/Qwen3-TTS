@@ -1,0 +1,31 @@
+## Progress Log
+
+### 2026-01-26: REQ-001 Infrastructure Files Created
+
+**Task:** REQ-001 - Create Docker container infrastructure
+
+**Completed Steps:**
+1. Created `requirements-server.txt` with FastAPI, uvicorn, soundfile, torch dependencies
+2. Created `Dockerfile` with:
+   - NVIDIA CUDA 12.4.1 base image
+   - Python 3.12
+   - FlashInfer installation from custom wheel index
+   - PyTorch CUDA 12.4 support
+   - Health check endpoint
+   - Uvicorn server launch command
+3. Created `docker-compose.yml` with:
+   - GPU passthrough via NVIDIA Container Toolkit
+   - Port 8000 exposed
+   - HuggingFace cache volume mount
+   - Health check configuration
+
+**Pending Steps (require REQ-002/REQ-003):**
+- Step 3: docker compose up launches container successfully
+- Step 4: Model loads with attn_implementation=flashinfer backend
+
+**Files Created:**
+- `requirements-server.txt`
+- `Dockerfile`
+- `docker-compose.yml`
+
+**Status:** REQ-001 infrastructure files complete. Full verification blocked until server code is implemented.

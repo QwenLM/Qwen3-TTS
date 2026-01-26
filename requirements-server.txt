@@ -1,0 +1,17 @@
+# Qwen3-TTS REST API Server Dependencies
+
+# FastAPI server
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+
+# Audio processing
+soundfile>=0.12.0
+
+# PyTorch (CUDA 12.4 compatible)
+torch>=2.2.0
+
+# FlashInfer for optimized attention on DGX Spark
+# Install separately: pip install flashinfer -i https://flashinfer.ai/whl/cu124/torch2.4/
+
+# Local qwen_tts package (install with: pip install -e .)
+# Includes: transformers, accelerate, torchaudio, librosa, einops
