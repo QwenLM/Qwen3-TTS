@@ -335,3 +335,39 @@ All verification steps passed:
 - `ui/streamlit_app.py`
 
 **Status:** REQ-007 complete. Streamlit demo UI ready for integration with backend.
+
+### 2026-01-26: REQ-008 Streamlit UI Container Infrastructure
+
+**Task:** REQ-008 - Add Streamlit UI container to docker-compose
+
+**Completed Steps:**
+1. Created `ui/Dockerfile` with:
+   - Python 3.12-slim base image
+   - Streamlit and requests dependencies installed
+   - Health check endpoint for `/_stcore/health`
+   - Runs Streamlit on `0.0.0.0:8501`
+
+2. Created `ui/requirements.txt` with:
+   - `streamlit>=1.30.0`
+   - `requests>=2.31.0`
+
+3. Updated `docker-compose.yml` with `streamlit-ui` service:
+   - Builds from `./ui/Dockerfile`
+   - Container name: `qwen3-tts-ui`
+   - Port 8501 exposed to host
+   - `TTS_API_URL=http://qwen3-tts-server:8000` environment variable
+   - `depends_on: qwen3-tts-server` with `condition: service_healthy`
+   - Health check configuration
+
+**Verification:**
+- `docker compose config` validates successfully
+- Both services configured with proper networking
+
+**Files Created:**
+- `ui/Dockerfile`
+- `ui/requirements.txt`
+
+**Files Modified:**
+- `docker-compose.yml`
+
+**Status:** REQ-008 complete. All PRD requirements now passing.

@@ -100,7 +100,7 @@
         "Configure service to connect to qwen3-tts-server backend",
         "Expose Streamlit on port 8501"
       ],
-      "passes": false
+      "passes": true
     }
   ],
   "api_spec": {
