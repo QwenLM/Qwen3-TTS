@@ -81,3 +81,23 @@
 - `server/fastapi_server.py`
 
 **Status:** REQ-002 complete. FastAPI server ready for integration testing.
+
+### 2026-01-26: REQ-004 Verified Complete
+
+**Task:** REQ-004 - Implement health and metadata endpoints
+
+**Verification:**
+1. `GET /health` endpoint (line 71) returns `HealthResponse` with:
+   - `status: str` (returns "healthy")
+   - `model_loaded: bool` (from model manager)
+2. `GET /v1/tts/speakers` endpoint (line 78) returns `SpeakersResponse` with:
+   - `speakers: list[str]` (from model manager)
+3. `GET /v1/tts/languages` endpoint (line 86) returns `LanguagesResponse` with:
+   - `languages: list[str]` (from model manager)
+
+**Code Validation:**
+- Python syntax check passed (`py_compile`) for both `fastapi_server.py` and `model_manager.py`
+- All endpoints verified present via grep analysis
+- Response model fields verified to match PRD spec via AST analysis
+
+**Status:** REQ-004 complete. All health and metadata endpoints implemented and verified.

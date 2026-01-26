@@ -50,7 +50,7 @@
         "GET /v1/tts/speakers returns list of available speakers",
         "GET /v1/tts/languages returns list of supported languages"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "REQ-005",
