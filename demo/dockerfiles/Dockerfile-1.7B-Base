@@ -1,0 +1,24 @@
+FROM pytorch/pytorch:2.8.0-cuda12.8-cudnn9-runtime
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    sox \
+    libsox-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+RUN pip install --no-cache-dir -U qwen-tts && \
+    pip install "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.8cxx11abiTRUE-cp311-cp311-linux_x86_64.whl"
+
+WORKDIR /app
+
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
+EXPOSE 8000
+
+CMD ["qwen-tts-demo", "Qwen/Qwen3-TTS-12Hz-1.7B-Base", "--ip", "0.0.0.0", "--port", "8000"]
