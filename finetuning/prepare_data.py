@@ -18,7 +18,7 @@ import argparse
 import json
 
 from qwen_tts import Qwen3TTSTokenizer
-from qwen_tts.core.device_utils import get_optimal_device, get_device_info
+from qwen_tts.core.device_utils import get_optimal_device, get_device_info, get_model_path
 
 BATCH_INFER_NUM = 32
 
@@ -34,8 +34,11 @@ def main():
     device = get_optimal_device(args.device)
     print(f"Using device: {get_device_info(device)}\n")
 
+    # Use local model if available, otherwise download from HuggingFace
+    tokenizer_path = get_model_path(args.tokenizer_model_path)
+
     tokenizer_12hz = Qwen3TTSTokenizer.from_pretrained(
-        args.tokenizer_model_path,
+        tokenizer_path,
         device_map=device,
     )
 

@@ -32,6 +32,7 @@ from ..core.device_utils import (
     get_optimal_device,
     get_attention_implementation,
     get_device_info,
+    get_model_path,
 )
 
 
@@ -607,6 +608,9 @@ def main(argv=None) -> int:
 
     ckpt = _resolve_checkpoint(args)
 
+    # Use local model if available, otherwise use specified checkpoint
+    model_path = get_model_path(ckpt)
+
     # Auto-detect device if not specified
     device = get_optimal_device(args.device)
     print(f"Using device: {get_device_info(device)}")
@@ -616,7 +620,7 @@ def main(argv=None) -> int:
     attn_impl = get_attention_implementation(device, "flash_attention_2" if args.flash_attn else None)
 
     tts = Qwen3TTSModel.from_pretrained(
-        ckpt,
+        model_path,
         device_map=device,
         dtype=dtype,
         attn_implementation=attn_impl,

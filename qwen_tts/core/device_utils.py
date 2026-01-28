@@ -9,6 +9,7 @@ models. Supports CUDA, Apple Metal Performance Shaders (MPS), and CPU with
 automatic fallback (MPS > CUDA > CPU).
 """
 
+import os
 import warnings
 from typing import Optional, Union
 
@@ -221,3 +222,36 @@ def get_device_info(device: Union[str, torch.device]) -> str:
         return "CPU"
     else:
         return f"Device: {device}"
+
+
+def get_model_path(
+    model_id: str, local_models_dir: str = "./models"
+) -> str:
+    """
+    Get model path, preferring local directory if it exists.
+
+    Checks if a model is available locally, and uses it if found.
+    Otherwise, returns the HuggingFace model ID for auto-download.
+
+    Args:
+        model_id: HuggingFace model ID (e.g., "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice")
+        local_models_dir: Directory containing locally downloaded models (default: "./models")
+
+    Returns:
+        Local path if model exists locally, otherwise HuggingFace model ID.
+
+    Example:
+        >>> path = get_model_path("Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice")
+        # If ./models/Qwen3-TTS-12Hz-1.7B-CustomVoice exists, returns that path
+        # Otherwise returns "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
+    """
+    # Extract model name from HuggingFace ID
+    model_name = model_id.split("/")[-1]
+    local_path = os.path.join(local_models_dir, model_name)
+
+    if os.path.isdir(local_path):
+        print(f"Found local model: {local_path}")
+        return local_path
+
+    print(f"Local model not found at {local_path}, will download from HuggingFace...")
+    return model_id

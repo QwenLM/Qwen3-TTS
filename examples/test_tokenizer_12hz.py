@@ -18,7 +18,7 @@ import requests
 import soundfile as sf
 
 from qwen_tts import Qwen3TTSTokenizer
-from qwen_tts.core.device_utils import get_optimal_device, get_device_info
+from qwen_tts.core.device_utils import get_optimal_device, get_device_info, get_model_path
 
 audio_1 = "https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen3-TTS-Repo/tokenizer_demo_1.wav"
 audio_2 = "https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen3-TTS-Repo/tokenizer_demo_2.wav"
@@ -27,9 +27,12 @@ audio_2 = "https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen3-TTS-Repo/tokeni
 device = get_optimal_device()
 print(f"Using device: {get_device_info(device)}\n")
 
+# Use local model if available, otherwise download from HuggingFace
+tokenizer_path = get_model_path("Qwen/Qwen3-TTS-Tokenizer-12Hz")
+
 # -------- Single input: wav path --------
 tokenizer_12hz = Qwen3TTSTokenizer.from_pretrained(
-    "Qwen/Qwen3-TTS-Tokenizer-12Hz",
+    tokenizer_path,
     device_map=device,
 )
 
