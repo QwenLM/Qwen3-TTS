@@ -22,3 +22,8 @@ wheels/
 .vscode/
 venv/
 env/
+.venv/
+.DS_Store
+
+# Models directory (large files from Hugging Face)
+models/
