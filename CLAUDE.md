@@ -286,9 +286,28 @@ from qwen_tts import Qwen3TTSModel
 
 ### Model Loading Best Practices
 1. **Always use `torch.bfloat16`** for optimal quality/performance
-2. **Use FlashAttention 2** when available (requires compatible hardware)
-3. **Explicit device placement**: Use `device_map="cuda:0"` or specific device
-4. **Batch inference**: Pass lists to generate functions for efficiency
+2. **Device detection**: Use `get_optimal_device()` from `qwen_tts.core.device_utils` for automatic device selection (MPS > CUDA > CPU)
+3. **FlashAttention**: Use `get_attention_implementation()` to get device-appropriate attention implementation (auto-skipped on non-CUDA)
+4. **Explicit device placement**: Can override with `device_map="cuda:0"`, `device_map="mps"`, or `device_map="cpu"` if needed
+5. **Batch inference**: Pass lists to generate functions for efficiency
+6. **Device-agnostic timing**: Use `device_synchronize()` from device_utils instead of `torch.cuda.synchronize()`
+
+**Example:**
+```python
+from qwen_tts import Qwen3TTSModel
+from qwen_tts.core.device_utils import get_optimal_device, get_attention_implementation
+import torch
+
+device = get_optimal_device()  # Auto-detects MPS > CUDA > CPU
+attn_impl = get_attention_implementation(device)
+
+model = Qwen3TTSModel.from_pretrained(
+    "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+    device_map=device,
+    dtype=torch.bfloat16,
+    attn_implementation=attn_impl,
+)
+```
 
 ### Audio Handling
 - **Output format**: `(wavs, sample_rate)` tuple
@@ -325,6 +344,66 @@ python examples/test_tokenizer_12hz.py
 - **Quality**: 4.16 UTMOS score
 
 ## Common Development Tasks
+
+### macOS / Apple Silicon Development
+
+When developing and testing on macOS with Apple Silicon (M1/M2/M3/M4):
+
+1. **Device Utilities**: Always use device detection functions from `qwen_tts.core.device_utils`:
+   - `get_optimal_device()` - Auto-detects MPS > CUDA > CPU
+   - `get_attention_implementation()` - Returns appropriate attention backend for device
+   - `device_synchronize()` - Device-agnostic synchronization for timing
+   - `get_device_info()` - Human-readable device description
+
+2. **Example Development Pattern**:
+   ```python
+   from qwen_tts import Qwen3TTSModel
+   from qwen_tts.core.device_utils import (
+       get_optimal_device,
+       get_attention_implementation,
+       device_synchronize,
+       get_device_info,
+   )
+   import torch
+   import time
+
+   # Auto-detect device
+   device = get_optimal_device()
+   print(f"Using device: {get_device_info(device)}")
+
+   # Get appropriate attention for this device
+   attn_impl = get_attention_implementation(device)
+
+   # Load model
+   model = Qwen3TTSModel.from_pretrained(
+       "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+       device_map=device,
+       dtype=torch.bfloat16,
+       attn_implementation=attn_impl,
+   )
+
+   # Device-agnostic timing
+   device_synchronize(device)
+   t0 = time.time()
+   wavs, sr = model.generate_custom_voice(...)
+   device_synchronize(device)
+   print(f"Time: {time.time() - t0:.3f}s")
+   ```
+
+3. **FlashAttention on macOS**: FlashAttention 2 is CUDA-only and not available on macOS. The device utilities automatically handle this:
+   - On macOS: `get_attention_implementation()` returns `None`, uses default attention
+   - On CUDA: Returns `"flash_attention_2"` if `flash-attn` is installed
+   - Explicit requests for FlashAttention on non-CUDA devices are warned and skipped
+
+4. **Performance Expectations**:
+   - MPS is 2-3x faster than CPU
+   - Typically slower than modern NVIDIA GPUs
+   - Good for development and testing
+
+5. **Memory Management**:
+   - M-series uses unified memory (CPU + GPU shared)
+   - If MPS runs out of memory: Use `device_map="cpu"` as fallback
+   - Monitor with Activity Monitor's GPU Memory
 
 ### Adding New Speakers (Fine-tuning)
 1. Collect 10-50 utterances from target speaker

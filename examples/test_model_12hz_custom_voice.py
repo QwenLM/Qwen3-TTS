@@ -18,21 +18,30 @@ import torch
 import soundfile as sf
 
 from qwen_tts import Qwen3TTSModel
+from qwen_tts.core.device_utils import (
+    get_optimal_device,
+    get_attention_implementation,
+    device_synchronize,
+    get_device_info,
+)
 
 
 def main():
-    device = "cuda:0"
+    device = get_optimal_device()
+    print(f"Using device: {get_device_info(device)}\n")
     MODEL_PATH = "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice/"
+
+    attn_impl = get_attention_implementation(device)
 
     tts = Qwen3TTSModel.from_pretrained(
         MODEL_PATH,
         device_map=device,
         dtype=torch.bfloat16,
-        attn_implementation="flash_attention_2",
+        attn_implementation=attn_impl,
     )
 
     # -------- Single (with instruct) --------
-    torch.cuda.synchronize()
+    device_synchronize(device)
     t0 = time.time()
 
     wavs, sr = tts.generate_custom_voice(
@@ -42,7 +51,7 @@ def main():
         instruct="用特别愤怒的语气说",
     )
 
-    torch.cuda.synchronize()
+    device_synchronize(device)
     t1 = time.time()
     print(f"[CustomVoice Single] time: {t1 - t0:.3f}s")
 
@@ -54,7 +63,7 @@ def main():
     speakers = ["Vivian", "Ryan"]
     instructs = ["", "Very happy."]
 
-    torch.cuda.synchronize()
+    device_synchronize(device)
     t0 = time.time()
 
     wavs, sr = tts.generate_custom_voice(
@@ -65,7 +74,7 @@ def main():
         max_new_tokens=2048,
     )
 
-    torch.cuda.synchronize()
+    device_synchronize(device)
     t1 = time.time()
     print(f"[CustomVoice Batch] time: {t1 - t0:.3f}s")
 
