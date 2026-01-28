@@ -29,7 +29,7 @@ from qwen_tts.core.device_utils import (
 def main():
     device = get_optimal_device()
     print(f"Using device: {get_device_info(device)}\n")
-    MODEL_PATH = "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice/"
+    MODEL_PATH = "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
 
     attn_impl = get_attention_implementation(device)
 

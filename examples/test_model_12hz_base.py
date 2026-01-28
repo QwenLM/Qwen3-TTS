@@ -48,7 +48,7 @@ def run_case(tts: Qwen3TTSModel, out_dir: str, case_name: str, call_fn, device: 
 def main():
     device = get_optimal_device()
     print(f"Using device: {get_device_info(device)}\n")
-    MODEL_PATH = "Qwen/Qwen3-TTS-12Hz-1.7B-Base/"
+    MODEL_PATH = "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
     OUT_DIR = "qwen3_tts_test_voice_clone_output_wav"
     ensure_dir(OUT_DIR)
 
