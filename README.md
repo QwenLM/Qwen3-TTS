@@ -79,26 +79,77 @@ Below is an introduction and download information for the Qwen3-TTS models that 
 | Qwen3-TTS-12Hz-0.6B-CustomVoice | Supports 9 premium timbres covering various combinations of gender, age, language, and dialect. | Chinese, English, Japanese, Korean, German, French, Russian, Portuguese, Spanish, Italian | ✅ |  |
 | Qwen3-TTS-12Hz-0.6B-Base | Base model capable of 3-second rapid voice clone from user audio input; can be used for fine-tuning (FT) other models. | Chinese, English, Japanese, Korean, German, French, Russian, Portuguese, Spanish, Italian | ✅ |  |
 
-During model loading in the qwen-tts package or vLLM, model weights will be automatically downloaded based on the model name. However, if your runtime environment is not conducive to downloading weights during execution, you can refer to the following commands to manually download the model weights to a local directory:
+### Model Loading and Caching
+
+During model loading in the qwen-tts package or vLLM, model weights will be automatically downloaded based on the model name. The library provides **smart model path detection** that automatically checks for locally downloaded models in the `./models/` directory before downloading from the internet.
+
+**Smart Model Path Detection:**
+
+All examples and scripts automatically check for locally downloaded models in the `./models/` directory. If a model is found locally, it will be used. Otherwise, the model will be automatically downloaded from HuggingFace or ModelScope.
+
+```bash
+# Recommended directory structure for local models
+./models/
+├── Qwen3-TTS-Tokenizer-12Hz/
+├── Qwen3-TTS-12Hz-1.7B-CustomVoice/
+├── Qwen3-TTS-12Hz-1.7B-VoiceDesign/
+├── Qwen3-TTS-12Hz-1.7B-Base/
+├── Qwen3-TTS-12Hz-0.6B-CustomVoice/
+└── Qwen3-TTS-12Hz-0.6B-Base/
+```
+
+**Manual Model Download (Optional):**
+
+If your runtime environment is not conducive to downloading weights during execution, you can manually download the model weights to the `./models/` directory using the following commands to download the model weights to a local directory:
 
 ```bash
 # Download through ModelScope (recommended for users in Mainland China)
 pip install -U modelscope
-modelscope download --model Qwen/Qwen3-TTS-Tokenizer-12Hz  --local_dir ./Qwen3-TTS-Tokenizer-12Hz 
-modelscope download --model Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice --local_dir ./Qwen3-TTS-12Hz-1.7B-CustomVoice
-modelscope download --model Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign --local_dir ./Qwen3-TTS-12Hz-1.7B-VoiceDesign
-modelscope download --model Qwen/Qwen3-TTS-12Hz-1.7B-Base --local_dir ./Qwen3-TTS-12Hz-1.7B-Base
-modelscope download --model Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice --local_dir ./Qwen3-TTS-12Hz-0.6B-CustomVoice
-modelscope download --model Qwen/Qwen3-TTS-12Hz-0.6B-Base --local_dir ./Qwen3-TTS-12Hz-0.6B-Base
+modelscope download --model Qwen/Qwen3-TTS-Tokenizer-12Hz  --local_dir ./models/Qwen3-TTS-Tokenizer-12Hz
+modelscope download --model Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice --local_dir ./models/Qwen3-TTS-12Hz-1.7B-CustomVoice
+modelscope download --model Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign --local_dir ./models/Qwen3-TTS-12Hz-1.7B-VoiceDesign
+modelscope download --model Qwen/Qwen3-TTS-12Hz-1.7B-Base --local_dir ./models/Qwen3-TTS-12Hz-1.7B-Base
+modelscope download --model Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice --local_dir ./models/Qwen3-TTS-12Hz-0.6B-CustomVoice
+modelscope download --model Qwen/Qwen3-TTS-12Hz-0.6B-Base --local_dir ./models/Qwen3-TTS-12Hz-0.6B-Base
 
 # Download through Hugging Face
 pip install -U "huggingface_hub[cli]"
-huggingface-cli download Qwen/Qwen3-TTS-Tokenizer-12Hz --local-dir ./Qwen3-TTS-Tokenizer-12Hz
-huggingface-cli download Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice --local-dir ./Qwen3-TTS-12Hz-1.7B-CustomVoice
-huggingface-cli download Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign --local-dir ./Qwen3-TTS-12Hz-1.7B-VoiceDesign
-huggingface-cli download Qwen/Qwen3-TTS-12Hz-1.7B-Base --local-dir ./Qwen3-TTS-12Hz-1.7B-Base
-huggingface-cli download Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice --local-dir ./Qwen3-TTS-12Hz-0.6B-CustomVoice
-huggingface-cli download Qwen/Qwen3-TTS-12Hz-0.6B-Base --local-dir ./Qwen3-TTS-12Hz-0.6B-Base
+huggingface-cli download Qwen/Qwen3-TTS-Tokenizer-12Hz --local-dir ./models/Qwen3-TTS-Tokenizer-12Hz
+huggingface-cli download Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice --local-dir ./models/Qwen3-TTS-12Hz-1.7B-CustomVoice
+huggingface-cli download Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign --local-dir ./models/Qwen3-TTS-12Hz-1.7B-VoiceDesign
+huggingface-cli download Qwen/Qwen3-TTS-12Hz-1.7B-Base --local-dir ./models/Qwen3-TTS-12Hz-1.7B-Base
+huggingface-cli download Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice --local-dir ./models/Qwen3-TTS-12Hz-0.6B-CustomVoice
+huggingface-cli download Qwen/Qwen3-TTS-12Hz-0.6B-Base --local-dir ./models/Qwen3-TTS-12Hz-0.6B-Base
+```
+
+Then use the models with smart path detection:
+
+```python
+from qwen_tts import Qwen3TTSModel
+
+# Library automatically checks ./models/ directory
+# If model found locally → uses it
+# If not found → downloads from HuggingFace
+model = Qwen3TTSModel.from_pretrained(
+    "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+    dtype=torch.bfloat16,
+)
+
+# Or use explicit local path
+model = Qwen3TTSModel.from_pretrained(
+    "./models/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+    dtype=torch.bfloat16,
+)
+```
+
+**Console output examples:**
+
+```bash
+# If local model found
+Found local model: ./models/Qwen3-TTS-12Hz-1.7B-CustomVoice
+
+# If downloading from HuggingFace
+Local model not found at ./models/Qwen3-TTS-12Hz-1.7B-CustomVoice, will download from HuggingFace...
 ```
 
 

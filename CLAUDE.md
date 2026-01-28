@@ -286,27 +286,49 @@ from qwen_tts import Qwen3TTSModel
 
 ### Model Loading Best Practices
 1. **Always use `torch.bfloat16`** for optimal quality/performance
-2. **Device detection**: Use `get_optimal_device()` from `qwen_tts.core.device_utils` for automatic device selection (MPS > CUDA > CPU)
-3. **FlashAttention**: Use `get_attention_implementation()` to get device-appropriate attention implementation (auto-skipped on non-CUDA)
-4. **Explicit device placement**: Can override with `device_map="cuda:0"`, `device_map="mps"`, or `device_map="cpu"` if needed
-5. **Batch inference**: Pass lists to generate functions for efficiency
-6. **Device-agnostic timing**: Use `device_synchronize()` from device_utils instead of `torch.cuda.synchronize()`
+2. **Smart model path detection**: Use `get_model_path()` to automatically check for local models before downloading
+3. **Device detection**: Use `get_optimal_device()` for automatic device selection (MPS > CUDA > CPU)
+4. **FlashAttention**: Use `get_attention_implementation()` to get device-appropriate attention (auto-skipped on non-CUDA)
+5. **Explicit device placement**: Can override with `device_map="cuda:0"`, `device_map="mps"`, or `device_map="cpu"` if needed
+6. **Batch inference**: Pass lists to generate functions for efficiency
+7. **Device-agnostic timing**: Use `device_synchronize()` instead of `torch.cuda.synchronize()`
 
-**Example:**
+**Complete Example:**
 ```python
 from qwen_tts import Qwen3TTSModel
-from qwen_tts.core.device_utils import get_optimal_device, get_attention_implementation
+from qwen_tts.core.device_utils import (
+    get_model_path,
+    get_optimal_device,
+    get_attention_implementation,
+)
 import torch
 
-device = get_optimal_device()  # Auto-detects MPS > CUDA > CPU
+# Smart model path: checks ./models/ first, then downloads if needed
+model_path = get_model_path("Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice")
+
+# Auto-detects optimal device (MPS > CUDA > CPU)
+device = get_optimal_device()
+
+# Gets appropriate attention implementation for device
 attn_impl = get_attention_implementation(device)
 
+# Load model
 model = Qwen3TTSModel.from_pretrained(
-    "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+    model_path,
     device_map=device,
     dtype=torch.bfloat16,
     attn_implementation=attn_impl,
 )
+```
+
+**Model Organization:**
+For smart path detection to work, organize downloaded models in `./models/` directory:
+```
+./models/
+├── Qwen3-TTS-Tokenizer-12Hz/
+├── Qwen3-TTS-12Hz-1.7B-CustomVoice/
+├── Qwen3-TTS-12Hz-1.7B-VoiceDesign/
+└── ...
 ```
 
 ### Audio Handling
