@@ -24,6 +24,7 @@ venv/
 env/
 .venv/
 .DS_Store
+.claude/
 
 # Models directory (large files from Hugging Face)
 models/
