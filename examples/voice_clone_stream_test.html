@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Voice Clone Streaming Test</title>
+    <style>
+      :root {
+        --bg: #101313;
+        --bg2: #1a1f1f;
+        --panel: #141919;
+        --ink: #f2f6f4;
+        --muted: #a7b0ad;
+        --accent: #00d4a3;
+        --accent-2: #ffb347;
+        --line: #273030;
+        --shadow: rgba(0, 0, 0, 0.35);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        font-family: "Space Grotesk", "Segoe UI", sans-serif;
+        background:
+          radial-gradient(1200px 600px at 15% -10%, rgba(0, 212, 163, 0.15), transparent 60%),
+          radial-gradient(900px 500px at 110% 0%, rgba(255, 179, 71, 0.12), transparent 60%),
+          linear-gradient(180deg, var(--bg), var(--bg2));
+        min-height: 100vh;
+        padding: 32px;
+        animation: fade-in 0.6s ease-out;
+      }
+
+      @keyframes fade-in {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      .shell {
+        max-width: 980px;
+        margin: 0 auto;
+        display: grid;
+        gap: 18px;
+      }
+
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 12px;
+        padding: 12px 0;
+      }
+
+      h1 {
+        font-size: clamp(24px, 3vw, 36px);
+        margin: 0;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+      }
+
+      header p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 18px;
+        box-shadow: 0 18px 40px var(--shadow);
+      }
+
+      .grid {
+        display: grid;
+        gap: 14px;
+      }
+
+      .grid.two {
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      }
+
+      label {
+        font-size: 12px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+      }
+
+      input, select, textarea {
+        width: 100%;
+        margin-top: 6px;
+        padding: 10px 12px;
+        background: #0e1212;
+        border: 1px solid #233030;
+        border-radius: 10px;
+        color: var(--ink);
+        font-size: 14px;
+      }
+
+      textarea {
+        min-height: 110px;
+        resize: vertical;
+      }
+
+      .checkbox-row {
+        display: flex;
+        align-items: center;
+        min-height: 40px;
+      }
+
+      .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--muted);
+        text-transform: none;
+        letter-spacing: 0.02em;
+      }
+
+      .checkbox-label input {
+        width: auto;
+        margin: 0;
+      }
+
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      button {
+        border: 0;
+        border-radius: 10px;
+        padding: 10px 16px;
+        font-weight: 600;
+        cursor: pointer;
+        color: #0b1312;
+        background: linear-gradient(135deg, var(--accent), #67f0c9);
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+        box-shadow: 0 8px 18px rgba(0, 212, 163, 0.25);
+      }
+
+      button.secondary {
+        background: linear-gradient(135deg, #2b3434, #1f2626);
+        color: var(--ink);
+        box-shadow: none;
+        border: 1px solid var(--line);
+      }
+
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        box-shadow: none;
+      }
+
+      button:hover:not(:disabled) {
+        transform: translateY(-1px);
+      }
+
+      .status {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .pill {
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: #101616;
+        color: var(--accent-2);
+      }
+
+      pre {
+        margin: 0;
+        max-height: 180px;
+        overflow: auto;
+        background: #0a0e0e;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px;
+        font-size: 12px;
+        color: #d7e2de;
+      }
+
+      @media (max-width: 640px) {
+        body { padding: 20px; }
+        .panel { padding: 14px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <h1>Voice Clone Streaming Test</h1>
+        <p>Stream from the SSE endpoint and hear chunks immediately.</p>
+      </header>
+
+      <section class="panel grid">
+        <div class="grid two">
+          <div>
+            <label for="baseUrl">Base URL</label>
+            <input id="baseUrl" type="text" placeholder="http://localhost:8002" />
+          </div>
+          <div>
+            <label for="voiceId">Voice</label>
+            <select id="voiceId"></select>
+          </div>
+        </div>
+
+        <div class="grid two">
+          <div>
+            <label for="modelId">Model ID</label>
+            <select id="modelId"></select>
+          </div>
+          <div>
+            <label>&nbsp;</label>
+            <button id="loadModel" class="secondary">Load model</button>
+          </div>
+        </div>
+
+        <div class="grid two">
+          <div class="checkbox-row">
+            <label class="checkbox-label">
+              <input id="safeMode" type="checkbox" />
+              Safe mode (stability)
+            </label>
+          </div>
+          <div></div>
+        </div>
+
+        <div class="grid two">
+          <div>
+            <label for="chunkSize">Chunk size (codes)</label>
+            <input id="chunkSize" type="number" min="1" value="24" />
+          </div>
+          <div>
+            <label for="leftContext">Left context size (codes)</label>
+            <input id="leftContext" type="number" min="0" value="12" />
+          </div>
+        </div>
+
+        <div>
+          <label for="language">Language</label>
+          <select id="language">
+            <option value="Auto">Auto</option>
+            <option value="Chinese">Chinese</option>
+            <option value="English">English</option>
+            <option value="Japanese">Japanese</option>
+            <option value="Korean">Korean</option>
+            <option value="German">German</option>
+            <option value="French">French</option>
+            <option value="Russian">Russian</option>
+            <option value="Portuguese">Portuguese</option>
+            <option value="Spanish">Spanish</option>
+            <option value="Italian">Italian</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="text">Text</label>
+          <textarea id="text">안녕하세요. 만나서 반갑습니다. </textarea>
+        </div>
+
+        <div class="row">
+          <button id="loadVoices" class="secondary">Load voices</button>
+          <button id="start">Start streaming</button>
+          <button id="stop" class="secondary" disabled>Stop</button>
+        </div>
+        <div class="status">
+          <span class="pill" id="status">idle</span>
+          <span id="srLabel">sr: -</span>
+        </div>
+      </section>
+
+      <section class="panel grid">
+        <label>Log</label>
+        <pre id="log"></pre>
+      </section>
+    </main>
+
+    <script>
+      const baseUrlInput = document.getElementById("baseUrl");
+      const voiceSelect = document.getElementById("voiceId");
+      const modelSelect = document.getElementById("modelId");
+      const safeModeInput = document.getElementById("safeMode");
+      const loadModelBtn = document.getElementById("loadModel");
+      const chunkSizeInput = document.getElementById("chunkSize");
+      const leftContextInput = document.getElementById("leftContext");
+      const languageInput = document.getElementById("language");
+      const textInput = document.getElementById("text");
+      const statusEl = document.getElementById("status");
+      const srLabel = document.getElementById("srLabel");
+      const logEl = document.getElementById("log");
+      const loadBtn = document.getElementById("loadVoices");
+      const startBtn = document.getElementById("start");
+      const stopBtn = document.getElementById("stop");
+
+      let controller = null;
+      let audioCtx = null;
+      let playheadTime = 0;
+      let streamSampleRate = null;
+      let drainTimer = null;
+      const prebufferSeconds = 0.5;
+
+      const defaultBase = window.location.origin && window.location.origin !== "null"
+        ? window.location.origin
+        : "http://localhost:8002";
+      baseUrlInput.value = defaultBase;
+
+      function log(msg) {
+        logEl.textContent += msg + "\n";
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      function setStatus(msg) {
+        statusEl.textContent = msg;
+      }
+
+      async function loadModels() {
+        const base = baseUrlInput.value.trim();
+        if (!base) return;
+        try {
+          const res = await fetch(base + "/models");
+          const data = await res.json();
+          const models = data.models || [];
+          const current = modelSelect.value;
+          modelSelect.innerHTML = "";
+          for (const model of models) {
+            const opt = document.createElement("option");
+            opt.value = model;
+            opt.textContent = model;
+            modelSelect.appendChild(opt);
+          }
+          if (current) {
+            const existing = Array.from(modelSelect.options).some((opt) => opt.value === current);
+            if (!existing) {
+              const opt = document.createElement("option");
+              opt.value = current;
+              opt.textContent = current;
+              modelSelect.appendChild(opt);
+            }
+            modelSelect.value = current;
+          }
+          if (models.length) {
+            log("Models: " + models.length);
+          }
+        } catch (err) {
+          log("Failed to load models: " + err);
+        }
+      }
+
+      async function loadCurrentModel() {
+        const base = baseUrlInput.value.trim();
+        if (!base) return;
+        try {
+          const res = await fetch(base + "/health");
+          const data = await res.json();
+          if (data.model && !modelSelect.value) {
+            const existing = Array.from(modelSelect.options).some((opt) => opt.value === data.model);
+            if (!existing) {
+              const opt = document.createElement("option");
+              opt.value = data.model;
+              opt.textContent = data.model;
+              modelSelect.appendChild(opt);
+            }
+            modelSelect.value = data.model;
+            await loadVoices();
+          }
+          if (typeof data.safe_mode === "boolean") {
+            safeModeInput.checked = data.safe_mode;
+          }
+        } catch (err) {
+          log("Failed to load current model: " + err);
+        }
+      }
+
+      async function loadVoices() {
+        const base = baseUrlInput.value.trim();
+        if (!base) return;
+        try {
+          const res = await fetch(base + "/voices");
+          const data = await res.json();
+          voiceSelect.innerHTML = "";
+          const voices = data.voices || {};
+          const activeModel = (modelSelect.value || "").trim();
+          for (const [id, meta] of Object.entries(voices)) {
+            if (activeModel && meta.model_id && meta.model_id !== activeModel) {
+              continue;
+            }
+            const opt = document.createElement("option");
+            const name = meta.name || id.slice(0, 8);
+            opt.value = id;
+            const modelTag = meta.model_id ? meta.model_id.split("/").pop() : "unknown";
+            opt.textContent = name + " (" + id.slice(0, 8) + ") - " + modelTag;
+            voiceSelect.appendChild(opt);
+          }
+          if (!voiceSelect.options.length) {
+            const opt = document.createElement("option");
+            opt.value = "";
+            opt.textContent = "No voices found";
+            voiceSelect.appendChild(opt);
+          }
+          log("Loaded voices: " + voiceSelect.options.length);
+        } catch (err) {
+          log("Failed to load voices: " + err);
+        }
+      }
+
+      async function switchModel() {
+        const base = baseUrlInput.value.trim();
+        const modelId = (modelSelect.value || "").trim();
+        if (!base || !modelId) {
+          log("Missing base URL or model ID.");
+          return;
+        }
+        stopStream(true);
+        try {
+          const res = await fetch(base + "/model/load", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model_id: modelId, safe_mode: safeModeInput.checked }),
+          });
+          if (!res.ok) {
+            const errText = await res.text();
+            log("Model load failed: " + res.status + " " + errText);
+            return;
+          }
+          const data = await res.json();
+          log("Model loaded: " + (data.model || modelId));
+          await loadVoices();
+        } catch (err) {
+          log("Model load error: " + err);
+        }
+      }
+
+      function stopStream(resetStatus, closeAudio = true) {
+        if (controller) {
+          controller.abort();
+          controller = null;
+        }
+        if (drainTimer) {
+          clearTimeout(drainTimer);
+          drainTimer = null;
+        }
+        if (closeAudio && audioCtx) {
+          audioCtx.close();
+          audioCtx = null;
+        }
+        if (closeAudio) {
+          playheadTime = 0;
+          streamSampleRate = null;
+          srLabel.textContent = "sr: -";
+        }
+        if (resetStatus) setStatus("idle");
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+      }
+
+      function scheduleAudio(samples, sr) {
+        if (!audioCtx) return;
+        const buffer = audioCtx.createBuffer(1, samples.length, sr);
+        buffer.getChannelData(0).set(samples);
+        const source = audioCtx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioCtx.destination);
+        const now = audioCtx.currentTime;
+        if (playheadTime < now + 0.02) {
+          playheadTime = now + 0.02;
+        }
+        source.start(playheadTime);
+        playheadTime += buffer.duration;
+      }
+
+      function decodePcm16(base64Str) {
+        const binary = atob(base64Str);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        const view = new DataView(bytes.buffer);
+        const samples = new Float32Array(bytes.length / 2);
+        for (let i = 0; i < samples.length; i++) {
+          samples[i] = view.getInt16(i * 2, true) / 32768;
+        }
+        return samples;
+      }
+
+      function parseEventBlock(block) {
+        let event = "message";
+        const dataLines = [];
+        const lines = block.split("\n");
+        for (const line of lines) {
+          if (line.startsWith("event:")) {
+            event = line.slice(6).trim();
+          } else if (line.startsWith("data:")) {
+            dataLines.push(line.slice(5).trim());
+          }
+        }
+        return { event, data: dataLines.join("\n").trim() };
+      }
+
+      async function startStreaming() {
+        const base = baseUrlInput.value.trim();
+        const voiceId = voiceSelect.value;
+        const text = textInput.value.trim();
+        if (!base || !voiceId || !text) {
+          log("Missing base URL, voice, or text.");
+          return;
+        }
+
+        stopStream(false);
+        setStatus("connecting");
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        await audioCtx.resume();
+        playheadTime = audioCtx.currentTime + prebufferSeconds;
+
+        const payload = {
+          voice_id: voiceId,
+          text,
+          language: languageInput.value || "Auto",
+          chunk_size: Number(chunkSizeInput.value) || 8,
+          left_context_size: Number(leftContextInput.value) || 25,
+        };
+
+        controller = new AbortController();
+        const res = await fetch(base + "/voice/stream", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+
+        if (!res.ok || !res.body) {
+          log("Request failed: " + res.status);
+          stopStream(true);
+          return;
+        }
+
+        setStatus("streaming");
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let idx;
+          while ((idx = buffer.indexOf("\n\n")) !== -1) {
+            const block = buffer.slice(0, idx);
+            buffer = buffer.slice(idx + 2);
+            const { event, data } = parseEventBlock(block);
+            if (!data) continue;
+            if (event === "meta") {
+              try {
+                const meta = JSON.parse(data);
+                streamSampleRate = Number(meta.sr);
+                srLabel.textContent = "sr: " + streamSampleRate;
+                log("meta: sr=" + streamSampleRate);
+              } catch (err) {
+                log("meta parse error: " + err);
+              }
+            } else if (event === "end") {
+              setStatus("done");
+              const remaining = Math.max(0, playheadTime - audioCtx.currentTime);
+              drainTimer = setTimeout(() => {
+                stopStream(false);
+                setStatus("done");
+              }, (remaining + 0.05) * 1000);
+              return;
+            } else {
+              try {
+                const obj = JSON.parse(data);
+                const samples = decodePcm16(obj.audio);
+                const sr = streamSampleRate || obj.sr || audioCtx.sampleRate;
+                scheduleAudio(samples, sr);
+              } catch (err) {
+                log("chunk parse error: " + err);
+              }
+            }
+          }
+        }
+        setStatus("done");
+        const remaining = Math.max(0, playheadTime - audioCtx.currentTime);
+        drainTimer = setTimeout(() => {
+          stopStream(false);
+          setStatus("done");
+        }, (remaining + 0.05) * 1000);
+      }
+
+      loadBtn.addEventListener("click", loadVoices);
+      loadModelBtn.addEventListener("click", switchModel);
+      startBtn.addEventListener("click", startStreaming);
+      stopBtn.addEventListener("click", () => stopStream(true));
+
+      loadCurrentModel();
+      loadModels();
+      loadVoices();
+    </script>
+  </body>
+</html>

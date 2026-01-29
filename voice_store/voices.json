@@ -1,0 +1,52 @@
+{
+  "voices": {
+    "9a0aff0c1abe4f5e8d69b89f0b2271ce": {
+      "name": "\uc548\uc131\uc7ac",
+      "path": "prompts/9a0aff0c1abe4f5e8d69b89f0b2271ce.pt",
+      "created_at": "2026-01-25T07:45:09Z",
+      "model_id": "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
+    },
+    "03f79f10717a47e39e186e7ee4e53027": {
+      "name": "\uc548\uc131\uc7ac",
+      "path": "prompts/03f79f10717a47e39e186e7ee4e53027.pt",
+      "created_at": "2026-01-25T07:47:54Z",
+      "model_id": "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
+    },
+    "4f47f8af90404b9e93649ce83b18af78": {
+      "name": "\uc548\uc131\uc7ac(long)",
+      "path": "prompts/4f47f8af90404b9e93649ce83b18af78.pt",
+      "created_at": "2026-01-26T00:47:11Z",
+      "model_id": "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
+    },
+    "3665c5834221470591e3c8fcb0de6e50": {
+      "name": "3665c583",
+      "path": "prompts/3665c5834221470591e3c8fcb0de6e50.pt",
+      "created_at": "2026-01-27T11:13:14Z",
+      "model_id": "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
+    },
+    "415c673dbc4647e788b92f3ab7318877": {
+      "name": "PuppyAI",
+      "path": "prompts/415c673dbc4647e788b92f3ab7318877.pt",
+      "created_at": "2026-01-27T11:15:38Z",
+      "model_id": "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
+    },
+    "e5641b080c9a40d7b434cd62bf9f61d3": {
+      "name": "\ub6b1\uc774",
+      "path": "prompts/e5641b080c9a40d7b434cd62bf9f61d3.pt",
+      "created_at": "2026-01-27T11:54:25Z",
+      "model_id": "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
+    },
+    "4c5eb5a3c84c4f4183b831ac5a7fe41a": {
+      "name": "Trump",
+      "path": "prompts/4c5eb5a3c84c4f4183b831ac5a7fe41a.pt",
+      "created_at": "2026-01-28T07:46:49Z",
+      "model_id": "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
+    },
+    "3a886347faee4fa6a4a5ad432a3dcab7": {
+      "name": "\uc548\uc131\uc7ac(0.6B)",
+      "path": "prompts/3a886347faee4fa6a4a5ad432a3dcab7.pt",
+      "created_at": "2026-01-28T13:34:55Z",
+      "model_id": "Qwen/Qwen3-TTS-12Hz-0.6B-Base"
+    }
+  }
+}

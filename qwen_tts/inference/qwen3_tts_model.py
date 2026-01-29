@@ -17,7 +17,7 @@ import base64
 import io
 import urllib.request
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 import librosa
@@ -631,6 +631,390 @@ class Qwen3TTSModel:
                 wavs_out.append(wav)
 
         return wavs_out, fs
+
+    @torch.inference_mode()
+    def generate_voice_clone_stream(
+        self,
+        text: str,
+        language: Optional[str] = None,
+        ref_audio: Optional[AudioLike] = None,
+        ref_text: Optional[str] = None,
+        x_vector_only_mode: bool = False,
+        voice_clone_prompt: Optional[Union[Dict[str, Any], List[VoiceClonePromptItem]]] = None,
+        non_streaming_mode: bool = False,
+        chunk_size: int = 8,
+        left_context_size: int = 25,
+        **kwargs,
+    ) -> Iterator[Tuple[np.ndarray, int]]:
+        """
+        Stream voice-clone audio chunks (single sample only).
+
+        This method yields (wav_chunk, sample_rate) tuples as soon as each chunk is decoded.
+        """
+        if self.model.tts_model_type != "base":
+            raise ValueError(
+                f"model with \ntokenizer_type: {self.model.tokenizer_type}\n"
+                f"tts_model_size: {self.model.tts_model_size}\n"
+                f"tts_model_type: {self.model.tts_model_type}\n"
+                "does not support generate_voice_clone_stream, Please check Model Card or Readme for more details."
+            )
+        if not isinstance(text, str):
+            raise ValueError("Streaming mode only supports a single text string.")
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be a positive integer.")
+        if left_context_size < 0:
+            raise ValueError("left_context_size must be >= 0.")
+
+        if voice_clone_prompt is None:
+            if ref_audio is None:
+                raise ValueError("Either `voice_clone_prompt` or `ref_audio` must be provided.")
+            prompt_items = self.create_voice_clone_prompt(
+                ref_audio=ref_audio,
+                ref_text=ref_text,
+                x_vector_only_mode=x_vector_only_mode,
+            )
+            if len(prompt_items) != 1:
+                raise ValueError("Streaming mode only supports a single prompt item.")
+            voice_clone_prompt_dict = self._prompt_items_to_voice_clone_prompt(prompt_items)
+            ref_text_for_ids = prompt_items[0].ref_text
+        else:
+            if isinstance(voice_clone_prompt, list):
+                if len(voice_clone_prompt) != 1:
+                    raise ValueError("Streaming mode only supports a single prompt item.")
+                voice_clone_prompt_dict = self._prompt_items_to_voice_clone_prompt(voice_clone_prompt)
+                ref_text_for_ids = voice_clone_prompt[0].ref_text
+            else:
+                voice_clone_prompt_dict = voice_clone_prompt
+                ref_text_for_ids = None
+
+        def _ensure_list_field(val):
+            if val is None:
+                return None
+            return val if isinstance(val, list) else [val]
+
+        voice_clone_prompt_dict = {
+            "ref_code": _ensure_list_field(voice_clone_prompt_dict.get("ref_code")),
+            "ref_spk_embedding": _ensure_list_field(voice_clone_prompt_dict.get("ref_spk_embedding")),
+            "x_vector_only_mode": _ensure_list_field(voice_clone_prompt_dict.get("x_vector_only_mode", False)),
+            "icl_mode": _ensure_list_field(voice_clone_prompt_dict.get("icl_mode", False)),
+        }
+
+        if language is None:
+            language = "Auto"
+        self._validate_languages([language])
+
+        input_ids = self._tokenize_texts([self._build_assistant_text(text)])
+        input_id = input_ids[0]
+
+        ref_id = None
+        if ref_text_for_ids:
+            ref_id = self._tokenize_texts([self._build_ref_text(ref_text_for_ids)])[0]
+
+        gen_kwargs = self._merge_generate_kwargs(**kwargs)
+
+        if self.model.speech_tokenizer.get_model_type() != "qwen3_tts_tokenizer_12hz":
+            raise ValueError("Streaming decode currently supports only 12Hz tokenizer models.")
+
+        decoder = self.model.speech_tokenizer.model.decoder
+        decoder_device = getattr(self.model.speech_tokenizer, "device", self.model.talker.device)
+        decode_upsample = int(getattr(decoder, "total_upsample", 0)) or int(
+            self.model.speech_tokenizer.get_decode_upsample_rate()
+        )
+
+        def _decode_codes(codes: torch.Tensor, drop_codes: int) -> Optional[np.ndarray]:
+            if codes.numel() == 0:
+                return None
+            codes_t = codes.transpose(0, 1).unsqueeze(0).to(decoder_device)
+            wav = decoder(codes_t).squeeze(0).squeeze(0)
+            if drop_codes > 0:
+                drop = drop_codes * decode_upsample
+                if drop < wav.shape[-1]:
+                    wav = wav[drop:]
+                else:
+                    wav = wav[:0]
+            return wav.detach().to(torch.float32).cpu().numpy()
+
+        suppress_token_ids = [
+            i
+            for i in range(self.model.config.talker_config.vocab_size - 1024, self.model.config.talker_config.vocab_size)
+            if i not in (self.model.config.talker_config.codec_eos_token_id,)
+        ]
+
+        def _apply_repetition_penalty(logits: torch.Tensor, prev_tokens: List[int], penalty: float) -> torch.Tensor:
+            if penalty is None or penalty == 1.0 or not prev_tokens:
+                return logits
+            for tok in set(prev_tokens):
+                if logits[tok] < 0:
+                    logits[tok] *= penalty
+                else:
+                    logits[tok] /= penalty
+            return logits
+
+        def _filter_top_k_top_p(logits: torch.Tensor, top_k: int, top_p: float) -> torch.Tensor:
+            if top_k and top_k > 0:
+                values, _ = torch.topk(logits, top_k)
+                min_keep = values[-1]
+                logits = torch.where(logits < min_keep, torch.tensor(-float("inf"), device=logits.device), logits)
+            if top_p is not None and top_p < 1.0:
+                sorted_logits, sorted_indices = torch.sort(logits, descending=True)
+                probs = torch.softmax(sorted_logits, dim=-1)
+                cum_probs = probs.cumsum(dim=-1)
+                mask = cum_probs > top_p
+                if mask.numel() > 0:
+                    mask[0] = False
+                sorted_logits[mask] = -float("inf")
+                logits = torch.empty_like(logits).scatter_(0, sorted_indices, sorted_logits)
+            return logits
+
+        def _sample_next(logits: torch.Tensor, prev_tokens: List[int]) -> int:
+            logits = logits.clone()
+            if suppress_token_ids:
+                logits[suppress_token_ids] = -float("inf")
+            logits = _apply_repetition_penalty(logits, prev_tokens, float(gen_kwargs["repetition_penalty"]))
+            temperature = float(gen_kwargs["temperature"]) if gen_kwargs.get("temperature") is not None else 1.0
+            if temperature <= 0:
+                temperature = 1.0
+            logits = logits / temperature
+            logits = _filter_top_k_top_p(
+                logits,
+                int(gen_kwargs["top_k"]) if gen_kwargs.get("top_k") is not None else 0,
+                float(gen_kwargs["top_p"]) if gen_kwargs.get("top_p") is not None else 1.0,
+            )
+            if not bool(gen_kwargs.get("do_sample", True)):
+                return int(torch.argmax(logits).item())
+            probs = torch.softmax(logits.float(), dim=-1)
+            if not torch.isfinite(probs).all() or float(probs.sum().item()) <= 0:
+                return int(torch.argmax(logits).item())
+            return int(torch.multinomial(probs, num_samples=1).item())
+
+        voice_clone_spk_embeds = None
+        if voice_clone_prompt_dict.get("ref_spk_embedding") is not None:
+            voice_clone_spk_embeds = self.model.generate_speaker_prompt(voice_clone_prompt_dict)
+
+        if voice_clone_spk_embeds is None:
+            speaker_embed = None
+        else:
+            if voice_clone_prompt_dict["x_vector_only_mode"][0] or voice_clone_prompt_dict["icl_mode"][0]:
+                speaker_embed = voice_clone_spk_embeds[0]
+            else:
+                speaker_embed = None
+
+        if language.lower() == "auto":
+            language_id = None
+        else:
+            language_id = self.model.config.talker_config.codec_language_id[language.lower()]
+
+        tts_bos_embed, tts_eos_embed, tts_pad_embed = self.model.talker.text_projection(
+            self.model.talker.get_text_embeddings()(
+                torch.tensor(
+                    [[self.model.config.tts_bos_token_id, self.model.config.tts_eos_token_id, self.model.config.tts_pad_token_id]],
+                    device=self.model.talker.device,
+                    dtype=input_id.dtype,
+                )
+            )
+        ).chunk(3, dim=1)
+
+        if language_id is None:
+            codec_prefill_list = [[
+                self.model.config.talker_config.codec_nothink_id,
+                self.model.config.talker_config.codec_think_bos_id,
+                self.model.config.talker_config.codec_think_eos_id,
+            ]]
+        else:
+            codec_prefill_list = [[
+                self.model.config.talker_config.codec_think_id,
+                self.model.config.talker_config.codec_think_bos_id,
+                language_id,
+                self.model.config.talker_config.codec_think_eos_id,
+            ]]
+
+        codec_input_embedding_0 = self.model.talker.get_input_embeddings()(
+            torch.tensor(codec_prefill_list, device=self.model.talker.device, dtype=input_id.dtype)
+        )
+        codec_input_embedding_1 = self.model.talker.get_input_embeddings()(
+            torch.tensor(
+                [[self.model.config.talker_config.codec_pad_id, self.model.config.talker_config.codec_bos_id]],
+                device=self.model.talker.device,
+                dtype=input_id.dtype,
+            )
+        )
+        if speaker_embed is None:
+            codec_input_embedding = torch.cat([codec_input_embedding_0, codec_input_embedding_1], dim=1)
+        else:
+            codec_input_embedding = torch.cat(
+                [codec_input_embedding_0, speaker_embed.view(1, 1, -1), codec_input_embedding_1], dim=1
+            )
+
+        talker_input_embed_role = self.model.talker.text_projection(
+            self.model.talker.get_text_embeddings()(input_id[:, :3])
+        )
+        _talker_input_embed = torch.cat(
+            (tts_pad_embed.expand(-1, codec_input_embedding.shape[1] - 2, -1), tts_bos_embed),
+            dim=1,
+        ) + codec_input_embedding[:, :-1]
+        talker_input_embed = torch.cat((talker_input_embed_role, _talker_input_embed), dim=1)
+
+        ref_code_list = voice_clone_prompt_dict.get("ref_code")
+        ref_code_item = ref_code_list[0] if ref_code_list else None
+        if ref_code_item is not None and voice_clone_prompt_dict["icl_mode"][0]:
+            if ref_id is None:
+                raise ValueError("ref_text is required for ICL mode in streaming generation.")
+            icl_input_embed, trailing_text_hidden = self.model.generate_icl_prompt(
+                text_id=input_id[:, 3:-5],
+                ref_id=ref_id[:, 3:-2],
+                ref_code=ref_code_item.to(self.model.talker.device),
+                tts_pad_embed=tts_pad_embed,
+                tts_eos_embed=tts_eos_embed,
+                non_streaming_mode=non_streaming_mode,
+            )
+            talker_input_embed = torch.cat([talker_input_embed, icl_input_embed], dim=1)
+        else:
+            talker_input_embed = torch.cat(
+                [
+                    talker_input_embed,
+                    self.model.talker.text_projection(
+                        self.model.talker.get_text_embeddings()(input_id[:, 3:4])
+                    ) + codec_input_embedding[:, -1:],
+                ],
+                dim=1,
+            )
+            if non_streaming_mode:
+                talker_input_embed = talker_input_embed[:, :-1]
+                talker_input_embed = torch.cat(
+                    [
+                        talker_input_embed,
+                        torch.cat(
+                            (
+                                self.model.talker.text_projection(
+                                    self.model.talker.get_text_embeddings()(input_id[:, 3:-5])
+                                ),
+                                tts_eos_embed,
+                            ),
+                            dim=1,
+                        )
+                        + self.model.talker.get_input_embeddings()(
+                            torch.tensor(
+                                [[self.model.config.talker_config.codec_pad_id]] * (input_id[:, 3:-5].shape[1] + 1),
+                                device=self.model.talker.device,
+                                dtype=input_id.dtype,
+                            )
+                        ),
+                        tts_pad_embed
+                        + self.model.talker.get_input_embeddings()(
+                            torch.tensor(
+                                [[self.model.config.talker_config.codec_bos_id]],
+                                device=self.model.talker.device,
+                                dtype=input_id.dtype,
+                            )
+                        ),
+                    ],
+                    dim=1,
+                )
+                trailing_text_hidden = tts_pad_embed
+            else:
+                trailing_text_hidden = torch.cat(
+                    (
+                        self.model.talker.text_projection(
+                            self.model.talker.get_text_embeddings()(input_id[:, 4:-5])
+                        ),
+                        tts_eos_embed,
+                    ),
+                    dim=1,
+                )
+
+        prefill = self.model.talker(
+            inputs_embeds=talker_input_embed,
+            attention_mask=None,
+            use_cache=True,
+            output_hidden_states=True,
+            return_dict=True,
+            trailing_text_hidden=trailing_text_hidden,
+            tts_pad_embed=tts_pad_embed,
+            subtalker_dosample=bool(gen_kwargs.get("subtalker_dosample", True)),
+            subtalker_top_k=gen_kwargs.get("subtalker_top_k"),
+            subtalker_top_p=gen_kwargs.get("subtalker_top_p"),
+            subtalker_temperature=gen_kwargs.get("subtalker_temperature"),
+        )
+
+        next_token = _sample_next(prefill.logits[:, -1, :].squeeze(0), [])
+        past_key_values = prefill.past_key_values
+        past_hidden = prefill.past_hidden
+        generation_step = prefill.generation_step
+
+        ref_code = ref_code_item
+        context_codes = None
+        if ref_code is not None:
+            if left_context_size > 0:
+                context_codes = ref_code[-left_context_size:].to(decoder_device)
+            else:
+                context_codes = ref_code.to(decoder_device)
+
+        pending_codes: List[torch.Tensor] = []
+        prev_tokens: List[int] = []
+        max_new_tokens = int(gen_kwargs.get("max_new_tokens", 2048))
+        eos_token_id = int(self.model.config.talker_config.codec_eos_token_id)
+        sample_rate = int(self.model.speech_tokenizer.get_output_sample_rate())
+
+        for _ in range(max_new_tokens):
+            if next_token == eos_token_id:
+                break
+
+            output = self.model.talker(
+                input_ids=torch.tensor([[next_token]], device=self.model.talker.device),
+                attention_mask=None,
+                past_key_values=past_key_values,
+                use_cache=True,
+                output_hidden_states=True,
+                return_dict=True,
+                past_hidden=past_hidden,
+                trailing_text_hidden=trailing_text_hidden,
+                tts_pad_embed=tts_pad_embed,
+                generation_step=generation_step,
+                subtalker_dosample=bool(gen_kwargs.get("subtalker_dosample", True)),
+                subtalker_top_k=gen_kwargs.get("subtalker_top_k"),
+                subtalker_top_p=gen_kwargs.get("subtalker_top_p"),
+                subtalker_temperature=gen_kwargs.get("subtalker_temperature"),
+            )
+
+            codec_ids = output.hidden_states[1]
+            if codec_ids is None:
+                break
+            pending_codes.append(codec_ids.squeeze(0))
+            prev_tokens.append(int(next_token))
+
+            if len(pending_codes) >= chunk_size:
+                chunk = torch.stack(pending_codes[:chunk_size], dim=0)
+                pending_codes = pending_codes[chunk_size:]
+                if context_codes is not None and context_codes.numel() > 0:
+                    decode_codes = torch.cat([context_codes, chunk], dim=0)
+                    drop = int(context_codes.shape[0])
+                else:
+                    decode_codes = chunk
+                    drop = 0
+                wav_chunk = _decode_codes(decode_codes, drop)
+                if wav_chunk is not None and wav_chunk.size > 0:
+                    yield wav_chunk, sample_rate
+                if left_context_size > 0:
+                    context_codes = decode_codes[-left_context_size:]
+                else:
+                    context_codes = None
+
+            past_key_values = output.past_key_values
+            past_hidden = output.past_hidden
+            generation_step = output.generation_step
+            next_token = _sample_next(output.logits[:, -1, :].squeeze(0), prev_tokens)
+
+        if pending_codes:
+            chunk = torch.stack(pending_codes, dim=0)
+            if context_codes is not None and context_codes.numel() > 0:
+                decode_codes = torch.cat([context_codes, chunk], dim=0)
+                drop = int(context_codes.shape[0])
+            else:
+                decode_codes = chunk
+                drop = 0
+            wav_chunk = _decode_codes(decode_codes, drop)
+            if wav_chunk is not None and wav_chunk.size > 0:
+                yield wav_chunk, sample_rate
 
     # voice design model
     @torch.no_grad()
