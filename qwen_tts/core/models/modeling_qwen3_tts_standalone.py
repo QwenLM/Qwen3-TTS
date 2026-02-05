@@ -22,30 +22,210 @@ from functools import wraps
 from typing import Callable, Optional
 
 import huggingface_hub
+import logging
+from typing import Any, TypedDict
+
 import torch
-from huggingface_hub import snapshot_download
+from huggingface_hub import hf_hub_download, snapshot_download
 from librosa.filters import mel as librosa_mel_fn
 from torch import nn
 from torch.nn import functional as F
+
+# Keep these for now - they are complex and heavily used
 from transformers.cache_utils import Cache, DynamicCache
 from transformers.generation import GenerationMixin
-from transformers.integrations import use_kernel_forward_from_hub
-from transformers.masking_utils import (create_causal_mask,
-                                        create_sliding_window_causal_mask)
-from transformers.modeling_flash_attention_utils import FlashAttentionKwargs
 
 from .base_model_standalone import StandalonePreTrainedModel
-from transformers.processing_utils import Unpack
-from transformers.utils import can_return_tuple, logging
-from transformers.utils.hub import cached_file
-
 from ...inference.qwen3_tts_tokenizer import Qwen3TTSTokenizer
 from .configuration_qwen3_tts_standalone import (Qwen3TTSConfigStandalone,
                                       Qwen3TTSSpeakerEncoderConfigStandalone,
                                       Qwen3TTSTalkerCodePredictorConfigStandalone,
                                       Qwen3TTSTalkerConfigStandalone)
 
-logger = logging.get_logger(__name__)
+logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Typing Utilities (standalone replacements)
+# =============================================================================
+
+class FlashAttentionKwargs(TypedDict, total=False):
+    """TypedDict for flash attention keyword arguments."""
+    cu_seq_lens_q: Optional[torch.LongTensor]
+    cu_seq_lens_k: Optional[torch.LongTensor]
+    max_length_q: Optional[int]
+    max_length_k: Optional[int]
+
+
+def can_return_tuple(func):
+    """
+    Decorator to convert model output to tuple if return_dict=False.
+    
+    This is a standalone replacement for transformers.utils.can_return_tuple.
+    """
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        return_dict = getattr(getattr(self, "config", None), "return_dict", True)
+        return_dict_passed = kwargs.pop("return_dict", return_dict)
+        if return_dict_passed is not None:
+            return_dict = return_dict_passed
+        output = func(self, *args, **kwargs)
+        if not return_dict and not isinstance(output, tuple):
+            output = output.to_tuple()
+        return output
+    return wrapper
+
+
+def cached_file(
+    repo_id: str,
+    filename: str,
+    **kwargs,
+) -> str:
+    """
+    Download and cache a file from a HuggingFace repository.
+    
+    This is a standalone replacement for transformers.utils.hub.cached_file.
+    """
+    return hf_hub_download(repo_id=repo_id, filename=filename, **kwargs)
+
+
+# =============================================================================
+# Causal Mask Utilities (standalone replacements for transformers.masking_utils)
+# =============================================================================
+
+def create_causal_mask(
+    config,
+    input_embeds: torch.Tensor,
+    attention_mask: Optional[torch.Tensor],
+    cache_position: torch.Tensor,
+    past_key_values: Optional[Cache],
+    position_ids: Optional[torch.Tensor] = None,
+    **kwargs,
+) -> Optional[torch.Tensor]:
+    """
+    Create a standard causal attention mask.
+    
+    This is a simplified standalone replacement for transformers.masking_utils.create_causal_mask.
+    
+    Args:
+        config: Model configuration.
+        input_embeds: Input embeddings of shape (batch_size, seq_len, hidden_dim).
+        attention_mask: Optional 2D attention mask for padding.
+        cache_position: Tensor indicating current indices.
+        past_key_values: Optional past key values cache.
+        position_ids: Optional position IDs.
+    
+    Returns:
+        4D causal attention mask or None if using SDPA with is_causal=True.
+    """
+    # For SDPA, we can return None and let is_causal=True handle it
+    attn_impl = getattr(config, "_attn_implementation", "eager")
+    if attn_impl == "sdpa" and attention_mask is None:
+        return None
+    
+    batch_size, seq_len = input_embeds.shape[:2]
+    dtype = input_embeds.dtype
+    device = input_embeds.device
+    
+    # Determine the total key/value sequence length
+    if past_key_values is not None and hasattr(past_key_values, 'get_seq_length'):
+        past_len = past_key_values.get_seq_length()
+    else:
+        past_len = 0
+    
+    kv_seq_len = past_len + seq_len
+    
+    # Create causal mask: positions can only attend to earlier positions
+    # Shape: (1, 1, seq_len, kv_seq_len)
+    causal_mask = torch.full(
+        (1, 1, seq_len, kv_seq_len),
+        fill_value=torch.finfo(dtype).min,
+        dtype=dtype,
+        device=device,
+    )
+    
+    # Fill in the causal pattern: each position can attend to itself and all previous positions
+    if cache_position is not None:
+        # Use cache_position to determine which positions are visible
+        for i in range(seq_len):
+            pos = cache_position[i].item() if cache_position.numel() > i else i
+            causal_mask[0, 0, i, :pos + 1] = 0.0
+    else:
+        # Standard causal mask
+        for i in range(seq_len):
+            causal_mask[0, 0, i, :past_len + i + 1] = 0.0
+    
+    # Apply padding mask if provided
+    if attention_mask is not None and attention_mask.ndim == 2:
+        # Expand attention_mask from (batch, kv_seq_len) to (batch, 1, 1, kv_seq_len)
+        expanded_mask = attention_mask[:, None, None, :].to(dtype=dtype)
+        # Convert 0s to -inf, 1s to 0
+        inverted_mask = (1.0 - expanded_mask) * torch.finfo(dtype).min
+        # Combine with causal mask
+        causal_mask = causal_mask.expand(batch_size, -1, -1, -1) + inverted_mask[:, :, :, :kv_seq_len]
+    
+    return causal_mask
+
+
+def create_sliding_window_causal_mask(
+    config,
+    input_embeds: torch.Tensor,
+    attention_mask: Optional[torch.Tensor],
+    cache_position: torch.Tensor,
+    past_key_values: Optional[Cache],
+    position_ids: Optional[torch.Tensor] = None,
+    **kwargs,
+) -> Optional[torch.Tensor]:
+    """
+    Create a sliding window causal attention mask.
+    
+    This is a simplified standalone replacement for transformers.masking_utils.create_sliding_window_causal_mask.
+    """
+    # For SDPA with sliding window, we still need to create the mask
+    batch_size, seq_len = input_embeds.shape[:2]
+    dtype = input_embeds.dtype
+    device = input_embeds.device
+    
+    sliding_window = getattr(config, "sliding_window", None)
+    if sliding_window is None:
+        # Fall back to regular causal mask
+        return create_causal_mask(config, input_embeds, attention_mask, cache_position, past_key_values, position_ids)
+    
+    # Determine the total key/value sequence length
+    if past_key_values is not None and hasattr(past_key_values, 'get_seq_length'):
+        past_len = past_key_values.get_seq_length()
+    else:
+        past_len = 0
+    
+    kv_seq_len = past_len + seq_len
+    
+    # Create sliding window causal mask
+    causal_mask = torch.full(
+        (1, 1, seq_len, kv_seq_len),
+        fill_value=torch.finfo(dtype).min,
+        dtype=dtype,
+        device=device,
+    )
+    
+    if cache_position is not None:
+        for i in range(seq_len):
+            pos = cache_position[i].item() if cache_position.numel() > i else i
+            # Can attend to positions within sliding_window of current position
+            start = max(0, pos - sliding_window + 1)
+            causal_mask[0, 0, i, start:pos + 1] = 0.0
+    else:
+        for i in range(seq_len):
+            current_pos = past_len + i
+            start = max(0, current_pos - sliding_window + 1)
+            causal_mask[0, 0, i, start:current_pos + 1] = 0.0
+    
+    # Apply padding mask if provided
+    if attention_mask is not None and attention_mask.ndim == 2:
+        expanded_mask = attention_mask[:, None, None, :].to(dtype=dtype)
+        inverted_mask = (1.0 - expanded_mask) * torch.finfo(dtype).min
+        causal_mask = causal_mask.expand(batch_size, -1, -1, -1) + inverted_mask[:, :, :, :kv_seq_len]
+    
+    return causal_mask
 
 
 # =============================================================================
@@ -940,7 +1120,6 @@ class Qwen3TTSRotaryEmbeddingStandalone(nn.Module):
         return cos.to(dtype=x.dtype), sin.to(dtype=x.dtype)
 
 
-@use_kernel_forward_from_hub("RMSNorm")
 class Qwen3TTSRMSNormStandalone(nn.Module):
     def __init__(self, hidden_size, eps=1e-6):
         """
@@ -1113,7 +1292,7 @@ class Qwen3TTSTalkerAttentionStandalone(nn.Module):
         attention_mask: Optional[torch.Tensor],
         past_key_values: Optional[Cache] = None,
         cache_position: Optional[torch.LongTensor] = None,
-        **kwargs: Unpack[FlashAttentionKwargs],
+        **kwargs,
     ) -> tuple[torch.Tensor, Optional[torch.Tensor], Optional[tuple[torch.Tensor]]]:
         input_shape = hidden_states.shape[:-1]
         hidden_shape = (*input_shape, -1, self.head_dim)
@@ -1268,7 +1447,7 @@ class Qwen3TTSAttentionStandalone(nn.Module):
         attention_mask: Optional[torch.Tensor],
         past_key_values: Optional[Cache] = None,
         cache_position: Optional[torch.LongTensor] = None,
-        **kwargs: Unpack[FlashAttentionKwargs],
+        **kwargs,
     ) -> tuple[torch.Tensor, Optional[torch.Tensor], Optional[tuple[torch.Tensor]]]:
         input_shape = hidden_states.shape[:-1]
         hidden_shape = (*input_shape, -1, self.head_dim)
@@ -1328,7 +1507,7 @@ class Qwen3TTSDecoderLayerStandalone(nn.Module):
         use_cache: Optional[bool] = False,
         cache_position: Optional[torch.LongTensor] = None,
         position_embeddings: Optional[tuple[torch.Tensor, torch.Tensor]] = None,  # necessary, but kept here for BC
-        **kwargs: Unpack[FlashAttentionKwargs],
+        **kwargs,
     ) -> tuple[torch.FloatTensor, Optional[tuple[torch.FloatTensor, torch.FloatTensor]]]:
         residual = hidden_states
         hidden_states = self.input_layernorm(hidden_states)
@@ -1779,7 +1958,7 @@ class Qwen3TTSTalkerDecoderLayerStandalone(nn.Module):
         use_cache: Optional[bool] = False,
         cache_position: Optional[torch.LongTensor] = None,
         position_embeddings: Optional[tuple[torch.Tensor, torch.Tensor]] = None,  # necessary, but kept here for BC
-        **kwargs: Unpack[FlashAttentionKwargs],
+        **kwargs,
     ) -> tuple[torch.FloatTensor, Optional[tuple[torch.FloatTensor, torch.FloatTensor]]]:
         """
         Args:
@@ -1880,7 +2059,7 @@ class Qwen3TTSTalkerModelStandalone(Qwen3TTSTalkerTextPreTrainedModelStandalone)
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         cache_position: Optional[torch.LongTensor] = None,
-        **flash_attn_kwargs: Unpack[FlashAttentionKwargs],
+        **flash_attn_kwargs,
     ) -> BaseModelOutputWithPast:
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (

@@ -6,6 +6,7 @@ Supports both the original (transformers-based) model and the standalone model.
 """
 
 import argparse
+import os
 import soundfile as sf
 import torch
 
@@ -99,6 +100,10 @@ def main():
     )
 
     args = parser.parse_args()
+    
+    # delete the output file if it exists
+    if os.path.exists(args.output):
+        os.remove(args.output)
 
     # Set random seed if specified (for reproducibility)
     if args.seed is not None:
