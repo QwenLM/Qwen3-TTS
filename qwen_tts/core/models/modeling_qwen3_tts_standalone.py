@@ -16,7 +16,9 @@
 
 import json
 import os
+from collections import OrderedDict
 from dataclasses import dataclass
+from functools import wraps
 from typing import Callable, Optional
 
 import huggingface_hub
@@ -25,19 +27,12 @@ from huggingface_hub import snapshot_download
 from librosa.filters import mel as librosa_mel_fn
 from torch import nn
 from torch.nn import functional as F
-from transformers.activations import ACT2FN
 from transformers.cache_utils import Cache, DynamicCache
 from transformers.generation import GenerationMixin
 from transformers.integrations import use_kernel_forward_from_hub
 from transformers.masking_utils import (create_causal_mask,
                                         create_sliding_window_causal_mask)
 from transformers.modeling_flash_attention_utils import FlashAttentionKwargs
-from transformers.modeling_layers import GradientCheckpointingLayer
-from transformers.modeling_outputs import (BaseModelOutputWithPast,
-                                           CausalLMOutputWithPast, ModelOutput)
-from transformers.modeling_rope_utils import (ROPE_INIT_FUNCTIONS,
-                                              dynamic_rope_update)
-from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
 
 from .base_model_standalone import StandalonePreTrainedModel
 from transformers.processing_utils import Unpack
@@ -53,26 +48,352 @@ from .configuration_qwen3_tts_standalone import (Qwen3TTSConfigStandalone,
 logger = logging.get_logger(__name__)
 
 
-def _default_rope_init_fn(config, device=None):
+# =============================================================================
+# Activation Functions (standalone replacement for transformers.activations.ACT2FN)
+# =============================================================================
+
+class SiLUActivation(nn.Module):
+    """SiLU (Sigmoid Linear Unit) activation function, also known as Swish."""
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        return F.silu(input)
+
+
+class GELUActivation(nn.Module):
+    """GELU activation function."""
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        return F.gelu(input)
+
+
+class NewGELUActivation(nn.Module):
     """
-    Default RoPE initialization function for standard rotary embeddings.
+    GELU activation function with tanh approximation (as used in GPT-2/BERT).
+    """
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        return 0.5 * input * (1.0 + torch.tanh(
+            (2.0 / torch.pi) ** 0.5 * (input + 0.044715 * torch.pow(input, 3.0))
+        ))
+
+
+class _ACT2FN:
+    """
+    Activation function lookup that instantiates the appropriate activation module.
     
-    This is used when rope_scaling is None or rope_type is "default".
+    This is a standalone replacement for transformers.activations.ACT2FN.
+    """
+    _activations = {
+        "silu": SiLUActivation,
+        "swish": nn.SiLU,
+        "gelu": GELUActivation,
+        "gelu_new": NewGELUActivation,
+        "relu": nn.ReLU,
+        "tanh": nn.Tanh,
+        "sigmoid": nn.Sigmoid,
+    }
+    
+    def __getitem__(self, key: str) -> nn.Module:
+        if key not in self._activations:
+            raise KeyError(
+                f"Activation function '{key}' not found. "
+                f"Available activations: {list(self._activations.keys())}"
+            )
+        return self._activations[key]()
+
+
+ACT2FN = _ACT2FN()
+
+
+# =============================================================================
+# Model Outputs (standalone replacement for transformers.modeling_outputs)
+# =============================================================================
+
+class ModelOutput(OrderedDict):
+    """
+    Base class for all model outputs as dataclass.
+    
+    Has a `__getitem__` that allows indexing by integer or slice (like a tuple) 
+    or strings (like a dictionary) that will ignore the `None` attributes.
+    """
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+    
+    def __post_init__(self):
+        # Convert dataclass fields to OrderedDict entries
+        class_fields = {k: v for k, v in self.__dict__.items() if not k.startswith('_')}
+        for key, value in class_fields.items():
+            self[key] = value
+    
+    def __getitem__(self, k):
+        if isinstance(k, str):
+            return super().__getitem__(k)
+        else:
+            return self.to_tuple()[k]
+    
+    def to_tuple(self):
+        """Convert to tuple, filtering out None values."""
+        return tuple(v for v in self.values() if v is not None)
+    
+    def __iter__(self):
+        """Iterate over non-None values."""
+        return iter(v for v in self.values() if v is not None)
+
+
+@dataclass
+class BaseModelOutputWithPast(ModelOutput):
+    """
+    Base class for model outputs that may contain past key/values (for caching).
+    """
+    last_hidden_state: Optional[torch.FloatTensor] = None
+    past_key_values: Optional[Cache] = None
+    hidden_states: Optional[tuple] = None
+    attentions: Optional[tuple] = None
+    
+    def __post_init__(self):
+        self["last_hidden_state"] = self.last_hidden_state
+        self["past_key_values"] = self.past_key_values
+        self["hidden_states"] = self.hidden_states
+        self["attentions"] = self.attentions
+
+
+@dataclass
+class CausalLMOutputWithPast(ModelOutput):
+    """
+    Base class for causal language model outputs with past key/values.
+    """
+    loss: Optional[torch.FloatTensor] = None
+    logits: Optional[torch.FloatTensor] = None
+    past_key_values: Optional[Cache] = None
+    hidden_states: Optional[tuple] = None
+    attentions: Optional[tuple] = None
+    
+    def __post_init__(self):
+        self["loss"] = self.loss
+        self["logits"] = self.logits
+        self["past_key_values"] = self.past_key_values
+        self["hidden_states"] = self.hidden_states
+        self["attentions"] = self.attentions
+
+
+# =============================================================================
+# RoPE Utilities (standalone replacement for transformers.modeling_rope_utils)
+# =============================================================================
+
+def _compute_default_rope_parameters(config, device=None, seq_len=None):
+    """
+    Computes the inverse frequencies according to the original RoPE implementation.
+    
+    Args:
+        config: Model configuration with rope_theta, head_dim, etc.
+        device: Device to create tensors on.
+        seq_len: Current sequence length (unused for default RoPE).
+    
+    Returns:
+        Tuple of (inv_freq, attention_factor).
     """
     base = config.rope_theta
-    dim = config.head_dim
+    partial_rotary_factor = getattr(config, "partial_rotary_factor", 1.0)
+    head_dim = getattr(config, "head_dim", None) or config.hidden_size // config.num_attention_heads
+    dim = int(head_dim * partial_rotary_factor)
     
-    # Compute inverse frequencies
-    inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32, device=device) / dim))
+    attention_factor = 1.0  # Unused in default RoPE
     
-    # No attention scaling for default RoPE
-    attention_scaling = 1.0
-    
-    return inv_freq, attention_scaling
+    # Compute the inverse frequencies
+    inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.int64).to(device=device, dtype=torch.float) / dim))
+    return inv_freq, attention_factor
 
 
-# Extend ROPE_INIT_FUNCTIONS with our default implementation
-ROPE_INIT_FUNCTIONS_EXTENDED = {**ROPE_INIT_FUNCTIONS, "default": _default_rope_init_fn}
+def _compute_linear_rope_parameters(config, device=None, seq_len=None):
+    """Linear scaling of RoPE frequencies."""
+    inv_freq, attention_factor = _compute_default_rope_parameters(config, device, seq_len)
+    factor = config.rope_scaling.get("factor", 1.0)
+    inv_freq = inv_freq / factor
+    return inv_freq, attention_factor
+
+
+def _compute_dynamic_rope_parameters(config, device=None, seq_len=None):
+    """Dynamic NTK-aware scaling of RoPE frequencies."""
+    base = config.rope_theta
+    partial_rotary_factor = getattr(config, "partial_rotary_factor", 1.0)
+    head_dim = getattr(config, "head_dim", None) or config.hidden_size // config.num_attention_heads
+    dim = int(head_dim * partial_rotary_factor)
+    
+    max_position_embeddings = config.max_position_embeddings
+    factor = config.rope_scaling.get("factor", 1.0)
+    
+    attention_factor = 1.0
+    
+    if seq_len is not None and seq_len > max_position_embeddings:
+        # Dynamic scaling
+        base = base * ((factor * seq_len / max_position_embeddings) - (factor - 1)) ** (dim / (dim - 2))
+    
+    inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.int64).to(device=device, dtype=torch.float) / dim))
+    return inv_freq, attention_factor
+
+
+# RoPE initialization functions registry
+ROPE_INIT_FUNCTIONS = {
+    "default": _compute_default_rope_parameters,
+    "linear": _compute_linear_rope_parameters,
+    "dynamic": _compute_dynamic_rope_parameters,
+}
+
+
+def dynamic_rope_update(rope_forward):
+    """
+    Decorator to update RoPE parameters in the forward pass for dynamic RoPE types.
+    
+    Args:
+        rope_forward: The forward pass of the RoPE implementation.
+    
+    Returns:
+        The decorated forward pass.
+    """
+    def dynamic_frequency_update(self, position_ids, device):
+        """Dynamic RoPE layers recompute inv_freq when growing beyond cached length."""
+        seq_len = torch.max(position_ids) + 1
+        if seq_len > self.max_seq_len_cached:
+            inv_freq, self.attention_scaling = self.rope_init_fn(self.config, device, seq_len=seq_len)
+            self.register_buffer("inv_freq", inv_freq, persistent=False)
+            self.max_seq_len_cached = seq_len
+        
+        if seq_len < self.original_max_seq_len and self.max_seq_len_cached > self.original_max_seq_len:
+            self.original_inv_freq = self.original_inv_freq.to(device)
+            self.register_buffer("inv_freq", self.original_inv_freq, persistent=False)
+            self.max_seq_len_cached = self.original_max_seq_len
+    
+    @wraps(rope_forward)
+    def wrapper(self, x, position_ids):
+        if "dynamic" in self.rope_type:
+            dynamic_frequency_update(self, position_ids, device=x.device)
+        return rope_forward(self, x, position_ids)
+    
+    return wrapper
+
+
+# Extended ROPE_INIT_FUNCTIONS with backward compatibility
+ROPE_INIT_FUNCTIONS_EXTENDED = {**ROPE_INIT_FUNCTIONS, "default": _compute_default_rope_parameters}
+
+
+# =============================================================================
+# Attention Functions (standalone replacement for transformers.modeling_utils.ALL_ATTENTION_FUNCTIONS)
+# =============================================================================
+
+def _repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
+    """Repeat key/value heads for multi-query/grouped-query attention."""
+    if n_rep == 1:
+        return hidden_states
+    batch, num_kv_heads, slen, head_dim = hidden_states.shape
+    hidden_states = hidden_states[:, :, None, :, :].expand(batch, num_kv_heads, n_rep, slen, head_dim)
+    return hidden_states.reshape(batch, num_kv_heads * n_rep, slen, head_dim)
+
+
+def sdpa_attention_forward(
+    module: nn.Module,
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    attention_mask: Optional[torch.Tensor],
+    dropout: float = 0.0,
+    scaling: Optional[float] = None,
+    is_causal: Optional[bool] = None,
+    **kwargs,
+) -> tuple:
+    """
+    Scaled Dot-Product Attention using PyTorch's F.scaled_dot_product_attention.
+    """
+    if hasattr(module, "num_key_value_groups"):
+        key = _repeat_kv(key, module.num_key_value_groups)
+        value = _repeat_kv(value, module.num_key_value_groups)
+    
+    if attention_mask is not None and attention_mask.ndim == 4:
+        attention_mask = attention_mask[:, :, :, : key.shape[-2]]
+    
+    if is_causal is None:
+        is_causal = query.shape[2] > 1 and attention_mask is None and getattr(module, "is_causal", True)
+    
+    attn_output = F.scaled_dot_product_attention(
+        query,
+        key,
+        value,
+        attn_mask=attention_mask,
+        dropout_p=dropout,
+        scale=scaling,
+        is_causal=is_causal,
+    )
+    attn_output = attn_output.transpose(1, 2).contiguous()
+    
+    return attn_output, None
+
+
+def flash_attention_forward(
+    module: nn.Module,
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    attention_mask: Optional[torch.Tensor],
+    dropout: float = 0.0,
+    scaling: Optional[float] = None,
+    sliding_window: Optional[int] = None,
+    softcap: Optional[float] = None,
+    **kwargs,
+) -> tuple:
+    """
+    Flash Attention 2 forward pass.
+    
+    Note: This requires the flash_attn package to be installed.
+    Falls back to SDPA if flash_attn is not available.
+    """
+    try:
+        from flash_attn import flash_attn_func, flash_attn_varlen_func
+        from flash_attn.bert_padding import pad_input, unpad_input
+    except ImportError:
+        # Fall back to SDPA if flash_attn is not installed
+        return sdpa_attention_forward(
+            module, query, key, value, attention_mask, 
+            dropout=dropout, scaling=scaling, **kwargs
+        )
+    
+    # FA2 uses non-transposed inputs
+    query = query.transpose(1, 2)
+    key = key.transpose(1, 2)
+    value = value.transpose(1, 2)
+    
+    # Handle dtype conversion
+    target_dtype = None
+    if query.dtype == torch.float32:
+        if torch.is_autocast_enabled():
+            target_dtype = torch.get_autocast_gpu_dtype()
+        else:
+            target_dtype = torch.bfloat16
+        query = query.to(target_dtype)
+        key = key.to(target_dtype)
+        value = value.to(target_dtype)
+    
+    is_causal = kwargs.pop("is_causal", None)
+    if is_causal is None:
+        is_causal = getattr(module, "is_causal", True)
+    
+    flash_kwargs = {
+        "softmax_scale": scaling,
+        "causal": is_causal,
+    }
+    if sliding_window is not None:
+        flash_kwargs["window_size"] = (sliding_window, sliding_window)
+    
+    attn_output = flash_attn_func(
+        query, key, value,
+        dropout_p=dropout if module.training else 0.0,
+        **flash_kwargs,
+    )
+    
+    return attn_output, None
+
+
+# Registry of attention implementations
+ALL_ATTENTION_FUNCTIONS = {
+    "sdpa": sdpa_attention_forward,
+    "flash_attention_2": flash_attention_forward,
+}
 
 
 def download_weights_from_hf_specific(
@@ -985,7 +1306,7 @@ class Qwen3TTSAttentionStandalone(nn.Module):
         return attn_output, attn_weights
 
 
-class Qwen3TTSDecoderLayerStandalone(GradientCheckpointingLayer):
+class Qwen3TTSDecoderLayerStandalone(nn.Module):
     def __init__(self, config: Qwen3TTSConfigStandalone, layer_idx: int):
         super().__init__()
         self.hidden_size = config.hidden_size
@@ -1437,7 +1758,7 @@ class Qwen3TTSTalkerOutputWithPastStandalone(ModelOutput):
     tts_pad_embed: Optional[torch.FloatTensor] = None
 
 
-class Qwen3TTSTalkerDecoderLayerStandalone(GradientCheckpointingLayer):
+class Qwen3TTSTalkerDecoderLayerStandalone(nn.Module):
     def __init__(self, config, layer_idx):
         super().__init__()
         self.hidden_size = config.hidden_size
