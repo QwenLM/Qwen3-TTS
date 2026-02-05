@@ -24,11 +24,7 @@ dependencies = [
   "accelerate==1.12.0",
   "gradio",
   "librosa",
-  "torchaudio",
   "soundfile",
-  "sox",
-  "onnxruntime",
-  "einops",
 ]
 
 [project.urls]
