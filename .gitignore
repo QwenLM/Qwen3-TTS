@@ -24,3 +24,4 @@ venv/
 env/
 prompt.wav
 output.wav
+*.wav
