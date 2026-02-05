@@ -17,3 +17,6 @@ from .tokenizer_25hz.configuration_qwen3_tts_tokenizer_v1 import Qwen3TTSTokeniz
 from .tokenizer_25hz.modeling_qwen3_tts_tokenizer_v1 import Qwen3TTSTokenizerV1Model
 from .tokenizer_12hz.configuration_qwen3_tts_tokenizer_v2 import Qwen3TTSTokenizerV2Config
 from .tokenizer_12hz.modeling_qwen3_tts_tokenizer_v2 import Qwen3TTSTokenizerV2Model
+
+# Note: Standalone 12Hz tokenizer imports are done lazily in 
+# qwen_tts/core/tokenizer_12hz/__init__.py to avoid circular imports.

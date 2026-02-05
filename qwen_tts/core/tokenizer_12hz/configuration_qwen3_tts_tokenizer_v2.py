@@ -78,6 +78,7 @@ class Qwen3TTSTokenizerV2DecoderConfig(PretrainedConfig):
         rope_theta=10000,
         num_attention_heads=16,
         num_key_value_heads=16,
+        head_dim=None,
         attention_bias=False,
         sliding_window=72,
         intermediate_size=3072,
@@ -100,6 +101,8 @@ class Qwen3TTSTokenizerV2DecoderConfig(PretrainedConfig):
         self.rope_theta = rope_theta
         self.num_attention_heads = num_attention_heads
         self.num_key_value_heads = num_key_value_heads
+        # head_dim can be explicit (from saved config) or computed
+        self.head_dim = head_dim if head_dim is not None else hidden_size // num_attention_heads
         self.attention_bias = attention_bias
         self.sliding_window = sliding_window
         self.intermediate_size = intermediate_size
