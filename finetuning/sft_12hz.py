@@ -110,7 +110,7 @@ def train():
 
                 sub_talker_logits, sub_talker_loss = model.talker.forward_sub_talker_finetune(talker_codec_ids, talker_hidden_states)
 
-                loss = outputs.loss + sub_talker_loss
+                loss = outputs.loss + 0.3 * sub_talker_loss
 
                 accelerator.backward(loss)
 
