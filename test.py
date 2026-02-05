@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
 Simple test script for voice cloning with Qwen3 TTS.
+
+Supports both the original (transformers-based) model and the standalone model.
 """
 
 import argparse
+import os
 import soundfile as sf
 import torch
-from qwen_tts import Qwen3TTSModel
 
 
 def main():
@@ -81,8 +83,41 @@ def main():
         default="Auto",
         help="Language for synthesis (default: Auto)",
     )
+    parser.add_argument(
+        "--standalone",
+        action="store_true",
+        help=(
+            "Use the standalone model (transformers-free). "
+            "Note: This model is still under development and may not "
+            "have full functionality yet."
+        ),
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Random seed for reproducibility (default: None, no seed set)",
+    )
 
     args = parser.parse_args()
+    
+    # delete the output file if it exists
+    if os.path.exists(args.output):
+        os.remove(args.output)
+
+    # Set random seed if specified (for reproducibility)
+    if args.seed is not None:
+        import random
+        import numpy as np
+        random.seed(args.seed)
+        np.random.seed(args.seed)
+        torch.manual_seed(args.seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(args.seed)
+            # Enable deterministic operations for full reproducibility
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+        print(f"Random seed set to {args.seed}")
 
     # Auto-detect device if not specified
     if args.device is None:
@@ -99,10 +134,16 @@ def main():
     else:
         device = args.device
 
-    # Toggle flash attention based on GPU availability (CUDA only)
+    # Toggle flash attention based on GPU availability (CUDA only) and package availability
     use_gpu = device.startswith("cuda") if isinstance(device, str) else False
     if use_gpu:
-        attn_impl = "flash_attention_2"
+        # Check if flash_attn package is installed
+        try:
+            import flash_attn
+            attn_impl = "flash_attention_2"
+        except ImportError:
+            attn_impl = None
+            print("Flash attention disabled (flash_attn package not installed)")
     else:
         attn_impl = None
         if device != "cpu":
@@ -118,8 +159,15 @@ def main():
     }
     dtype = dtype_map[args.dtype]
 
+    # Choose model class based on --standalone flag
+    if args.standalone:
+        print("Using standalone model (transformers-free)...")
+        from qwen_tts import Qwen3TTSModelStandalone as ModelClass
+    else:
+        from qwen_tts import Qwen3TTSModel as ModelClass
+
     print(f"Loading model from {args.checkpoint}...")
-    model = Qwen3TTSModel.from_pretrained(
+    model = ModelClass.from_pretrained(
         args.checkpoint,
         device_map=device,
         dtype=dtype,

@@ -44,3 +44,9 @@ include-package-data = true
 
 [tool.setuptools.package-data]
 qwen_tts = ["py.typed", "**/*.npz"]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "e2e: marks tests as end-to-end integration tests",
+]
