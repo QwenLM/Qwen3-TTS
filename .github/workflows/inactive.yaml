@@ -10,7 +10,7 @@ jobs:
       issues: write
       pull-requests: write
     steps:
-      - uses: actions/stale@v9
+      - uses: actions/stale@997185467fa4f803885201cee163a9f38240193d # v10.1.1
         with:
           days-before-issue-stale: 45
           days-before-issue-close: 30
@@ -19,13 +19,13 @@ jobs:
             This issue has been automatically marked as inactive 
             due to lack of recent activity. 
             Should you believe it remains unresolved and warrants attention, 
-            kindly leave a comment on this thread. 
+            kindly leave a comment on this thread.
           exempt-issue-labels: enhancement,discussion
           days-before-pr-stale: -1
           days-before-pr-close: -1
           operations-per-run: 128
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: dessant/lock-threads@v5
+      - uses: dessant/lock-threads@7266a7ce5c1df01b1c6db85bf8cd86c737dadbe7 # v6.0.0
         with:
           issue-inactive-days: 60
           issue-comment: >
