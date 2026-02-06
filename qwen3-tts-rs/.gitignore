@@ -1,0 +1,5 @@
+/target/
+Cargo.lock
+
+# Downloaded test data (not tracked in git)
+/test_data/

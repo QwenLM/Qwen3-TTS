@@ -1,0 +1,57 @@
+[package]
+name = "qwen3-tts"
+version = "0.1.0"
+edition = "2021"
+description = "Pure Rust inference for Qwen3-TTS"
+license = "MIT"
+
+[features]
+default = ["cpu"]
+cpu = []
+cuda = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda"]
+metal = ["candle-core/metal", "candle-nn/metal", "candle-transformers/metal"]
+accelerate = ["candle-core/accelerate", "candle-nn/accelerate", "candle-transformers/accelerate"]
+mkl = ["candle-core/mkl", "candle-nn/mkl", "candle-transformers/mkl"]
+
+[dependencies]
+# Candle ML framework
+candle-core = "0.8"
+candle-nn = "0.8"
+candle-transformers = "0.8"
+
+# Tokenization (HuggingFace tokenizers in Rust)
+tokenizers = "0.21"
+
+# Audio processing
+hound = "3.5"              # WAV I/O
+rubato = "0.16"            # High-quality resampling
+rustfft = "6.2"            # FFT for spectrograms
+
+# Serialization & model loading
+safetensors = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Utilities
+anyhow = "1.0"
+thiserror = "2.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+rayon = "1.10"             # Parallel CPU processing
+byteorder = "1.5"
+num-traits = "0.2"
+num-complex = "0.4"
+
+# CLI (optional)
+clap = { version = "4.5", features = ["derive"], optional = true }
+indicatif = { version = "0.17", optional = true }
+
+[dev-dependencies]
+criterion = "0.5"
+approx = "0.5"
+tempfile = "3.15"
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3
