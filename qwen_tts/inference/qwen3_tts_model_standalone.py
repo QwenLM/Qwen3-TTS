@@ -29,8 +29,8 @@ import torch
 from huggingface_hub import hf_hub_download
 
 from ..core.models.configuration_qwen3_tts_standalone import Qwen3TTSConfigStandalone
-from ..core.models.modeling_qwen3_tts_standalone import Qwen3TTSForConditionalGenerationStandalone
 from ..core.models.processing_qwen3_tts_standalone import Qwen3TTSProcessorStandalone
+from ..core.models.tts_standalone import TTS
 
 AudioLike = Union[
     str,                     # wav path, URL, base64
@@ -46,7 +46,7 @@ class VoiceClonePromptItemStandalone:
     """
     Container for one sample's voice-clone prompt information that can be fed to the model.
 
-    Fields are aligned with `Qwen3TTSForConditionalGenerationStandalone.generate(..., voice_clone_prompt=...)`.
+    Fields are aligned with `TTS.generate(..., voice_clone_prompt=...)`.
     """
     ref_code: Optional[torch.Tensor]                 # (T, Q) or (T,) depending on tokenizer 25Hz/12Hz
     ref_spk_embedding: torch.Tensor                  # (D,)
@@ -66,12 +66,12 @@ class Qwen3TTSModelStandalone:
       - consistent output: (wavs: List[np.ndarray], sample_rate: int)
 
     Notes:
-      - This wrapper expects the underlying model class to be `Qwen3TTSForConditionalGenerationStandalone`
+      - This wrapper expects the underlying model class to be `TTS`
       - Language / speaker validation is done via model methods:
           model.get_supported_languages(), model.get_supported_speakers()
     """
 
-    def __init__(self, model: Qwen3TTSForConditionalGenerationStandalone, processor, generate_defaults: Optional[Dict[str, Any]] = None):
+    def __init__(self, model: TTS, processor, generate_defaults: Optional[Dict[str, Any]] = None):
         self.model = model
         self.processor = processor
         self.generate_defaults = generate_defaults or {}
@@ -118,7 +118,7 @@ class Qwen3TTSModelStandalone:
 
         This method:
           1) Loads config from the model directory or HuggingFace Hub.
-          2) Loads the model via Qwen3TTSForConditionalGenerationStandalone.from_pretrained().
+          2) Loads the model via TTS.from_pretrained().
           3) Loads the processor via Qwen3TTSProcessorStandalone.from_pretrained().
           4) Loads generation config from the model.
 
@@ -137,7 +137,7 @@ class Qwen3TTSModelStandalone:
         config = cls._load_config_from_path(pretrained_model_name_or_path)
         
         # Load model directly (no AutoModel registration needed)
-        model = Qwen3TTSForConditionalGenerationStandalone.from_pretrained(
+        model = TTS.from_pretrained(
             pretrained_model_name_or_path,
             config=config,
             **kwargs,
@@ -567,7 +567,7 @@ class Qwen3TTSModelStandalone:
                 Maximum number of new codec tokens to generate.
             **kwargs:
                 Any other keyword arguments supported by HuggingFace Transformers `generate()` can be passed.
-                They will be forwarded to the underlying `Qwen3TTSForConditionalGenerationStandalone.generate(...)`.
+                They will be forwarded to the underlying `TTS.generate(...)`.
 
         Returns:
             Tuple[List[np.ndarray], int]:
@@ -709,7 +709,7 @@ class Qwen3TTSModelStandalone:
                 Maximum number of new codec tokens to generate.
             **kwargs:
                 Any other keyword arguments supported by HuggingFace Transformers `generate()` can be passed.
-                They will be forwarded to the underlying `Qwen3TTSForConditionalGenerationStandalone.generate(...)`.
+                They will be forwarded to the underlying `TTS.generate(...)`.
 
         Returns:
             Tuple[List[np.ndarray], int]:
@@ -807,7 +807,7 @@ class Qwen3TTSModelStandalone:
                 Maximum number of new codec tokens to generate.
             **kwargs:
                 Any other keyword arguments supported by HuggingFace Transformers `generate()` can be passed.
-                They will be forwarded to the underlying `Qwen3TTSForConditionalGenerationStandalone.generate(...)`.
+                They will be forwarded to the underlying `TTS.generate(...)`.
 
         Returns:
             Tuple[List[np.ndarray], int]:
