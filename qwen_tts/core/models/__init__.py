@@ -31,3 +31,8 @@ from .modeling_qwen3_tts_standalone import (
     Qwen3TTSTalkerModelStandalone,
 )
 from .processing_qwen3_tts_standalone import Qwen3TTSProcessorStandalone
+
+# Simplified standalone implementations (recommended)
+from .code_predictor_standalone import CodePredictor
+from .talker_standalone import Talker
+from .tts_standalone import TTS

@@ -26,6 +26,7 @@ from .rope import (
     _compute_linear_rope_parameters,
     dynamic_rope_update,
 )
+from .sample import sample_top_k_top_p
 from .utils import cached_file, can_return_tuple
 
 __all__ = [
@@ -58,6 +59,8 @@ __all__ = [
     "_compute_linear_rope_parameters",
     "_compute_dynamic_rope_parameters",
     "dynamic_rope_update",
+    # Sampling
+    "sample_top_k_top_p",
     # Utils
     "can_return_tuple",
     "cached_file",
