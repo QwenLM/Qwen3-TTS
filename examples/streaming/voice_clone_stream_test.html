@@ -234,17 +234,28 @@
               Safe mode (stability)
             </label>
           </div>
-          <div></div>
+          <div class="checkbox-row">
+            <label class="checkbox-label">
+              <input id="smoothMode" type="checkbox" checked />
+              Smooth boundaries (lookahead)
+            </label>
+          </div>
+          <div class="checkbox-row">
+            <label class="checkbox-label">
+              <input id="binaryMode" type="checkbox" checked />
+              Binary stream (PCM)
+            </label>
+          </div>
         </div>
 
         <div class="grid two">
           <div>
             <label for="chunkSize">Chunk size (codes)</label>
-            <input id="chunkSize" type="number" min="1" value="24" />
+            <input id="chunkSize" type="number" min="1" value="8" />
           </div>
           <div>
             <label for="leftContext">Left context size (codes)</label>
-            <input id="leftContext" type="number" min="0" value="12" />
+            <input id="leftContext" type="number" min="0" value="25" />
           </div>
         </div>
 
@@ -292,6 +303,8 @@
       const voiceSelect = document.getElementById("voiceId");
       const modelSelect = document.getElementById("modelId");
       const safeModeInput = document.getElementById("safeMode");
+      const smoothModeInput = document.getElementById("smoothMode");
+      const binaryModeInput = document.getElementById("binaryMode");
       const loadModelBtn = document.getElementById("loadModel");
       const chunkSizeInput = document.getElementById("chunkSize");
       const leftContextInput = document.getElementById("leftContext");
@@ -309,7 +322,14 @@
       let playheadTime = 0;
       let streamSampleRate = null;
       let drainTimer = null;
-      const prebufferSeconds = 0.5;
+      let voicesCache = {};
+      let prebufferSeconds = 0.5;
+      let pendingChunk = null;
+      let bufferTargetSec = 0.6;
+      const bufferMinSec = 0.3;
+      const bufferMaxSec = 1.4;
+      let rtfEma = null;
+      let lastChunkTs = null;
 
       const defaultBase = window.location.origin && window.location.origin !== "null"
         ? window.location.origin
@@ -323,6 +343,19 @@
 
       function setStatus(msg) {
         statusEl.textContent = msg;
+        const busy = msg === "connecting" || msg === "streaming" || msg === "loading model";
+        loadModelBtn.disabled = busy;
+        loadBtn.disabled = busy;
+      }
+
+      async function sendStopSignal() {
+        const base = baseUrlInput.value.trim();
+        if (!base) return;
+        try {
+          await fetch(base + "/voice/stop", { method: "POST" });
+        } catch (err) {
+          log("Stop signal failed: " + err);
+        }
       }
 
       async function loadModels() {
@@ -331,7 +364,8 @@
         try {
           const res = await fetch(base + "/models");
           const data = await res.json();
-          const models = data.models || [];
+          const rawModels = data.models || [];
+          const models = Array.from(new Set(rawModels));
           const current = modelSelect.value;
           modelSelect.innerHTML = "";
           for (const model of models) {
@@ -364,7 +398,7 @@
         try {
           const res = await fetch(base + "/health");
           const data = await res.json();
-          if (data.model && !modelSelect.value) {
+          if (data.model) {
             const existing = Array.from(modelSelect.options).some((opt) => opt.value === data.model);
             if (!existing) {
               const opt = document.createElement("option");
@@ -372,7 +406,11 @@
               opt.textContent = data.model;
               modelSelect.appendChild(opt);
             }
+            const prev = modelSelect.value;
             modelSelect.value = data.model;
+            if (prev !== data.model) {
+              log("Active model: " + data.model);
+            }
             await loadVoices();
           }
           if (typeof data.safe_mode === "boolean") {
@@ -391,6 +429,7 @@
           const data = await res.json();
           voiceSelect.innerHTML = "";
           const voices = data.voices || {};
+          voicesCache = voices;
           const activeModel = (modelSelect.value || "").trim();
           for (const [id, meta] of Object.entries(voices)) {
             if (activeModel && meta.model_id && meta.model_id !== activeModel) {
@@ -423,22 +462,34 @@
           return;
         }
         stopStream(true);
+        await sendStopSignal();
+        setStatus("loading model");
+        startBtn.disabled = true;
         try {
           const res = await fetch(base + "/model/load", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ model_id: modelId, safe_mode: safeModeInput.checked }),
+            body: JSON.stringify({
+              model_id: modelId,
+              safe_mode: safeModeInput.checked,
+              wait_timeout_sec: 30,
+            }),
           });
           if (!res.ok) {
             const errText = await res.text();
             log("Model load failed: " + res.status + " " + errText);
+            setStatus("idle");
             return;
           }
           const data = await res.json();
           log("Model loaded: " + (data.model || modelId));
           await loadVoices();
+          setStatus("idle");
         } catch (err) {
           log("Model load error: " + err);
+          setStatus("idle");
+        } finally {
+          startBtn.disabled = false;
         }
       }
 
@@ -447,10 +498,15 @@
           controller.abort();
           controller = null;
         }
+        sendStopSignal();
         if (drainTimer) {
           clearTimeout(drainTimer);
           drainTimer = null;
         }
+        pendingChunk = null;
+        bufferTargetSec = 0.6;
+        rtfEma = null;
+        lastChunkTs = null;
         if (closeAudio && audioCtx) {
           audioCtx.close();
           audioCtx = null;
@@ -467,6 +523,7 @@
 
       function scheduleAudio(samples, sr) {
         if (!audioCtx) return;
+        if (!samples || samples.length === 0) return;
         const buffer = audioCtx.createBuffer(1, samples.length, sr);
         buffer.getChannelData(0).set(samples);
         const source = audioCtx.createBufferSource();
@@ -494,6 +551,133 @@
         return samples;
       }
 
+      function decodePcm16Bytes(bytes) {
+        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        const samples = new Float32Array(bytes.byteLength / 2);
+        for (let i = 0; i < samples.length; i++) {
+          samples[i] = view.getInt16(i * 2, true) / 32768;
+        }
+        return samples;
+      }
+
+      function concatUint8(a, b) {
+        if (!a || a.length === 0) return b || new Uint8Array(0);
+        if (!b || b.length === 0) return a;
+        const out = new Uint8Array(a.length + b.length);
+        out.set(a, 0);
+        out.set(b, a.length);
+        return out;
+      }
+
+      function parsePcmHeader(bytes) {
+        if (bytes.length < 12) return null;
+        const magic = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
+        if (magic !== "QTS1") {
+          throw new Error("Invalid PCM stream header");
+        }
+        const view = new DataView(bytes.buffer, bytes.byteOffset, 12);
+        const sr = view.getUint32(4, true);
+        const sampleWidth = view.getUint16(8, true);
+        const channels = view.getUint16(10, true);
+        return { sr, sampleWidth, channels };
+      }
+
+      function concatFloat32(a, b) {
+        if (!a || a.length === 0) return b || new Float32Array(0);
+        if (!b || b.length === 0) return a;
+        const out = new Float32Array(a.length + b.length);
+        out.set(a, 0);
+        out.set(b, a.length);
+        return out;
+      }
+
+      function findLowEnergyIndex(samples, start, end, windowSize) {
+        const len = samples.length;
+        const s = Math.max(0, Math.min(start, len));
+        const e = Math.max(s + 1, Math.min(end, len));
+        if (e - s <= windowSize) return s;
+        const step = Math.max(1, Math.floor(windowSize / 2));
+        let bestIdx = s;
+        let bestEnergy = Infinity;
+        for (let i = s; i + windowSize <= e; i += step) {
+          let sum = 0;
+          for (let j = 0; j < windowSize; j++) {
+            const v = samples[i + j];
+            sum += v * v;
+          }
+          if (sum < bestEnergy) {
+            bestEnergy = sum;
+            bestIdx = i;
+          }
+        }
+        return bestIdx + Math.floor(windowSize / 2);
+      }
+
+      function crossfadeBoundary(left, right, sr) {
+        const fadeSamples = Math.max(1, Math.floor(sr * 0.018));
+        if (left.length < fadeSamples || right.length < fadeSamples) {
+          return { output: left, pending: right };
+        }
+        const tail = left.slice(left.length - fadeSamples);
+        const head = right.slice(0, fadeSamples);
+        const mixed = new Float32Array(fadeSamples);
+        const denom = Math.max(1, fadeSamples - 1);
+        for (let i = 0; i < fadeSamples; i++) {
+          const t = i / denom;
+          mixed[i] = tail[i] * (1 - t) + head[i] * t;
+        }
+        const output = concatFloat32(left.slice(0, left.length - fadeSamples), mixed);
+        const pending = right.slice(fadeSamples);
+        return { output, pending };
+      }
+
+      function emitBuffered(sr, forceFlush) {
+        if (!pendingChunk || pendingChunk.length === 0) return;
+
+        const fadeSamples = Math.max(1, Math.floor(sr * 0.018));
+        const windowSamples = Math.max(4, Math.floor(sr * 0.012));
+        const searchSamples = Math.max(fadeSamples * 2, Math.floor(sr * 0.12));
+        const tailSamples = Math.max(fadeSamples * 2, Math.floor(sr * 0.08));
+        const minBufferSamples = Math.max(fadeSamples * 2, Math.floor(sr * bufferTargetSec));
+
+        if (!forceFlush) {
+          if (pendingChunk.length < minBufferSamples + tailSamples + windowSamples) {
+            return;
+          }
+        }
+
+        if (forceFlush && pendingChunk.length <= fadeSamples * 2) {
+          scheduleAudio(pendingChunk, sr);
+          pendingChunk = null;
+          return;
+        }
+
+        const maxLen = pendingChunk.length;
+        const end = Math.max(windowSamples, maxLen - tailSamples);
+        const start = Math.max(0, end - searchSamples);
+        if (start >= end) {
+          scheduleAudio(pendingChunk, sr);
+          pendingChunk = null;
+          return;
+        }
+
+        let cutIdx = findLowEnergyIndex(pendingChunk, start, end, windowSamples);
+        cutIdx = Math.min(end, Math.max(minBufferSamples, cutIdx));
+        if (!forceFlush && cutIdx < minBufferSamples) {
+          return;
+        }
+
+        const left = pendingChunk.slice(0, cutIdx);
+        const right = pendingChunk.slice(cutIdx);
+        const stitched = crossfadeBoundary(left, right, sr);
+        scheduleAudio(stitched.output, sr);
+        pendingChunk = stitched.pending && stitched.pending.length ? stitched.pending : null;
+        if (forceFlush && pendingChunk && pendingChunk.length) {
+          scheduleAudio(pendingChunk, sr);
+          pendingChunk = null;
+        }
+      }
+
       function parseEventBlock(block) {
         let event = "message";
         const dataLines = [];
@@ -508,32 +692,108 @@
         return { event, data: dataLines.join("\n").trim() };
       }
 
-      async function startStreaming() {
-        const base = baseUrlInput.value.trim();
-        const voiceId = voiceSelect.value;
-        const text = textInput.value.trim();
-        if (!base || !voiceId || !text) {
-          log("Missing base URL, voice, or text.");
+      async function startStreamingBinary(base, payload) {
+        controller = new AbortController();
+        const res = await fetch(base + "/voice/stream_pcm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+
+        if (!res.ok || !res.body) {
+          let errText = "";
+          try {
+            errText = await res.text();
+          } catch (err) {
+            errText = "";
+          }
+          log("Binary stream failed: " + res.status + (errText ? " " + errText : ""));
+          if (res.status === 404 || res.status === 405) {
+            log("Falling back to SSE stream.");
+            binaryModeInput.checked = false;
+            return startStreamingSse(base, payload);
+          }
+          stopStream(true);
           return;
         }
 
-        stopStream(false);
-        setStatus("connecting");
-        startBtn.disabled = true;
-        stopBtn.disabled = false;
+        setStatus("streaming");
+        const reader = res.body.getReader();
+        let buffer = new Uint8Array(0);
+        let headerParsed = false;
+        let endReceived = false;
 
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        await audioCtx.resume();
-        playheadTime = audioCtx.currentTime + prebufferSeconds;
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value && value.length) {
+            buffer = concatUint8(buffer, value);
+          }
+          while (true) {
+            if (!headerParsed) {
+              const header = parsePcmHeader(buffer);
+              if (!header) break;
+              streamSampleRate = Number(header.sr);
+              srLabel.textContent = "sr: " + streamSampleRate;
+              log("pcm meta: sr=" + streamSampleRate);
+              if (header.sampleWidth !== 2 || header.channels !== 1) {
+                log("pcm format: " + header.sampleWidth + " bytes, ch=" + header.channels);
+              }
+              buffer = buffer.slice(12);
+              headerParsed = true;
+              continue;
+            }
+            if (buffer.length < 4) break;
+            const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+            const frameLen = view.getUint32(0, true);
+            if (frameLen === 0) {
+              buffer = buffer.slice(4);
+              endReceived = true;
+              break;
+            }
+            if (buffer.length < 4 + frameLen) break;
+            const frame = buffer.slice(4, 4 + frameLen);
+            buffer = buffer.slice(4 + frameLen);
+            const samples = decodePcm16Bytes(frame);
+            const sr = streamSampleRate || audioCtx.sampleRate;
+            const now = performance.now() / 1000;
+            if (lastChunkTs !== null) {
+              const dt = now - lastChunkTs;
+              const chunkSec = samples.length / Math.max(1, sr);
+              if (chunkSec > 0) {
+                const rtf = dt / chunkSec;
+                rtfEma = rtfEma === null ? rtf : (0.8 * rtfEma + 0.2 * rtf);
+                if (rtfEma > 1.05) {
+                  bufferTargetSec = Math.min(bufferMaxSec, bufferTargetSec + 0.08);
+                } else if (rtfEma < 0.9) {
+                  bufferTargetSec = Math.max(bufferMinSec, bufferTargetSec - 0.04);
+                }
+              }
+            }
+            lastChunkTs = now;
+            if (smoothModeInput.checked) {
+              pendingChunk = concatFloat32(pendingChunk, samples);
+              emitBuffered(sr, false);
+            } else {
+              scheduleAudio(samples, sr);
+            }
+          }
+          if (endReceived) break;
+        }
 
-        const payload = {
-          voice_id: voiceId,
-          text,
-          language: languageInput.value || "Auto",
-          chunk_size: Number(chunkSizeInput.value) || 8,
-          left_context_size: Number(leftContextInput.value) || 25,
-        };
+        setStatus("done");
+        if (smoothModeInput.checked) {
+          emitBuffered(streamSampleRate || audioCtx.sampleRate, true);
+        }
+        const remaining = Math.max(0, playheadTime - audioCtx.currentTime);
+        drainTimer = setTimeout(() => {
+          stopStream(false);
+          setStatus("done");
+        }, (remaining + 0.05) * 1000);
+      }
 
+      async function startStreamingSse(base, payload) {
         controller = new AbortController();
         const res = await fetch(base + "/voice/stream", {
           method: "POST",
@@ -543,7 +803,13 @@
         });
 
         if (!res.ok || !res.body) {
-          log("Request failed: " + res.status);
+          let errText = "";
+          try {
+            errText = await res.text();
+          } catch (err) {
+            errText = "";
+          }
+          log("Request failed: " + res.status + (errText ? " " + errText : ""));
           stopStream(true);
           return;
         }
@@ -574,6 +840,9 @@
               }
             } else if (event === "end") {
               setStatus("done");
+              if (smoothModeInput.checked) {
+                emitBuffered(streamSampleRate || audioCtx.sampleRate, true);
+              }
               const remaining = Math.max(0, playheadTime - audioCtx.currentTime);
               drainTimer = setTimeout(() => {
                 stopStream(false);
@@ -585,7 +854,30 @@
                 const obj = JSON.parse(data);
                 const samples = decodePcm16(obj.audio);
                 const sr = streamSampleRate || obj.sr || audioCtx.sampleRate;
-                scheduleAudio(samples, sr);
+                const now = performance.now() / 1000;
+                if (lastChunkTs !== null) {
+                  const dt = now - lastChunkTs;
+                  const chunkSec = samples.length / Math.max(1, sr);
+                  if (chunkSec > 0) {
+                    const rtf = dt / chunkSec;
+                    rtfEma = rtfEma === null ? rtf : (0.8 * rtfEma + 0.2 * rtf);
+                    if (rtfEma > 1.05) {
+                      bufferTargetSec = Math.min(bufferMaxSec, bufferTargetSec + 0.08);
+                    } else if (rtfEma < 0.9) {
+                      bufferTargetSec = Math.max(bufferMinSec, bufferTargetSec - 0.04);
+                    }
+                  }
+                }
+                lastChunkTs = now;
+                if (smoothModeInput.checked) {
+                  pendingChunk = concatFloat32(pendingChunk, samples);
+                  emitBuffered(sr, false);
+                } else {
+                  scheduleAudio(samples, sr);
+                }
+                if (obj.i === 0) {
+                  log("audio chunk 0 received");
+                }
               } catch (err) {
                 log("chunk parse error: " + err);
               }
@@ -593,6 +885,9 @@
           }
         }
         setStatus("done");
+        if (smoothModeInput.checked) {
+          emitBuffered(streamSampleRate || audioCtx.sampleRate, true);
+        }
         const remaining = Math.max(0, playheadTime - audioCtx.currentTime);
         drainTimer = setTimeout(() => {
           stopStream(false);
@@ -600,14 +895,83 @@
         }, (remaining + 0.05) * 1000);
       }
 
+      async function startStreaming() {
+        const base = baseUrlInput.value.trim();
+        const voiceId = voiceSelect.value;
+        const text = textInput.value.trim();
+        if (!base || !voiceId || !text) {
+          log("Missing base URL, voice, or text.");
+          return;
+        }
+
+        stopStream(false);
+        setStatus("connecting");
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        await audioCtx.resume();
+        bufferTargetSec = smoothModeInput.checked ? 0.6 : bufferMinSec;
+        rtfEma = null;
+        lastChunkTs = null;
+        prebufferSeconds = smoothModeInput.checked ? bufferTargetSec : 0.5;
+        playheadTime = audioCtx.currentTime + prebufferSeconds;
+
+        const payload = {
+          voice_id: voiceId,
+          text,
+          language: languageInput.value || "Auto",
+          chunk_size: Number(chunkSizeInput.value) || 8,
+          left_context_size: Number(leftContextInput.value) || 25,
+        };
+
+        const voiceMeta = voicesCache[voiceId] || {};
+        const expectedModel = (voiceMeta.model_id || "").trim();
+        if (expectedModel) {
+          try {
+            const res = await fetch(base + "/health");
+            if (res.ok) {
+              const data = await res.json();
+              const currentModel = (data.model || "").trim();
+              if (currentModel && currentModel !== expectedModel) {
+                log(
+                  "Voice created with " + expectedModel + ". Server model is " + currentModel + ". Click Load model."
+                );
+                stopStream(true);
+                return;
+              }
+            }
+          } catch (err) {
+            log("Model check failed: " + err);
+          }
+        }
+        const modelHint = (voiceMeta.model_id || modelSelect.value || "").trim();
+        if (safeModeInput.checked) {
+          payload.do_sample = false;
+          payload.subtalker_dosample = false;
+        } else if (modelHint.includes("0.6B")) {
+          payload.subtalker_dosample = false;
+        }
+
+        if (binaryModeInput.checked) {
+          await startStreamingBinary(base, payload);
+        } else {
+          await startStreamingSse(base, payload);
+        }
+      }
+
       loadBtn.addEventListener("click", loadVoices);
       loadModelBtn.addEventListener("click", switchModel);
       startBtn.addEventListener("click", startStreaming);
       stopBtn.addEventListener("click", () => stopStream(true));
 
-      loadCurrentModel();
-      loadModels();
-      loadVoices();
+      async function initPage() {
+        await loadCurrentModel();
+        await loadModels();
+        await loadVoices();
+      }
+
+      initPage();
     </script>
   </body>
 </html>

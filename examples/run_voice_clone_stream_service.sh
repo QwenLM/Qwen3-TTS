@@ -75,7 +75,7 @@ done
 mkdir -p "$VOICE_STORE"
 
 CUDA_VISIBLE_DEVICES="$GPU_ID" "$PYTHON_BIN" \
-  "$SCRIPT_DIR/voice_clone_stream_service.py" \
+  "$SCRIPT_DIR/streaming/voice_clone_stream_service.py" \
   --device "$DEVICE" \
   --ip "$IP" \
   --port "$PORT" \

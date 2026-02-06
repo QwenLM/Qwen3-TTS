@@ -17,7 +17,7 @@ import base64
 import io
 import urllib.request
 from dataclasses import dataclass
-from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 import librosa
@@ -72,6 +72,8 @@ class Qwen3TTSModel:
         self.processor = processor
         self.generate_defaults = generate_defaults or {}
 
+        self.model.eval()
+
         self.device = getattr(model, "device", None)
         if self.device is None:
             try:
@@ -99,6 +101,7 @@ class Qwen3TTSModel:
                 HuggingFace repo id or local directory of the model.
             **kwargs:
                 Forwarded as-is into `AutoModel.from_pretrained(...)`.
+                `dtype` is accepted as an alias for `torch_dtype`.
                 Typical examples: device_map="cuda:0", dtype=torch.bfloat16, attn_implementation="flash_attention_2".
 
         Returns:
@@ -108,6 +111,13 @@ class Qwen3TTSModel:
         AutoConfig.register("qwen3_tts", Qwen3TTSConfig)
         AutoModel.register(Qwen3TTSConfig, Qwen3TTSForConditionalGeneration)
         AutoProcessor.register(Qwen3TTSConfig, Qwen3TTSProcessor)
+
+        torch_dtype = kwargs.pop("torch_dtype", None)
+        dtype = kwargs.pop("dtype", None)
+        if dtype is None and torch_dtype is not None:
+            dtype = torch_dtype
+        if dtype is not None:
+            kwargs["torch_dtype"] = cls._normalize_torch_dtype(dtype)
 
         model = AutoModel.from_pretrained(pretrained_model_name_or_path, **kwargs)
         if not isinstance(model, Qwen3TTSForConditionalGeneration):
@@ -119,6 +129,24 @@ class Qwen3TTSModel:
 
         generate_defaults = model.generate_config
         return cls(model=model, processor=processor, generate_defaults=generate_defaults)
+
+    @staticmethod
+    def _normalize_torch_dtype(dtype: Any) -> torch.dtype:
+        if isinstance(dtype, torch.dtype):
+            return dtype
+        if isinstance(dtype, str):
+            key = dtype.strip().lower()
+            mapping = {
+                "bf16": torch.bfloat16,
+                "bfloat16": torch.bfloat16,
+                "fp16": torch.float16,
+                "float16": torch.float16,
+                "fp32": torch.float32,
+                "float32": torch.float32,
+            }
+            if key in mapping:
+                return mapping[key]
+        raise ValueError(f"Unsupported torch dtype: {dtype}")
 
     def _supported_languages_set(self) -> Optional[set]:
         langs = getattr(self.model, "get_supported_languages", None)
@@ -476,6 +504,7 @@ class Qwen3TTSModel:
         x_vector_only_mode: Union[bool, List[bool]] = False,
         voice_clone_prompt: Optional[Union[Dict[str, Any], List[VoiceClonePromptItem]]] = None,
         non_streaming_mode: bool = False,
+        match_voice: bool = False,
         **kwargs,
     ) -> Tuple[List[np.ndarray], int]:
         """
@@ -533,6 +562,8 @@ class Qwen3TTSModel:
                 Temperature for sub-talker sampling (only valid for qwen3-tts-tokenizer-v2).
             max_new_tokens:
                 Maximum number of new codec tokens to generate.
+            match_voice:
+                If True, enforce deterministic decoding for voice cloning unless sampling is explicitly requested.
             **kwargs:
                 Any other keyword arguments supported by HuggingFace Transformers `generate()` can be passed.
                 They will be forwarded to the underlying `Qwen3TTSForConditionalGeneration.generate(...)`.
@@ -599,6 +630,11 @@ class Qwen3TTSModel:
                     ref_ids.append(ref_tok)
 
         gen_kwargs = self._merge_generate_kwargs(**kwargs)
+        if match_voice:
+            if "do_sample" not in kwargs:
+                gen_kwargs["do_sample"] = False
+            if "subtalker_dosample" not in kwargs:
+                gen_kwargs["subtalker_dosample"] = False
 
         talker_codes_list, _ = self.model.generate(
             input_ids=input_ids,
@@ -644,12 +680,15 @@ class Qwen3TTSModel:
         non_streaming_mode: bool = False,
         chunk_size: int = 8,
         left_context_size: int = 25,
+        match_voice: bool = False,
+        should_stop: Optional[Callable[[], bool]] = None,
         **kwargs,
     ) -> Iterator[Tuple[np.ndarray, int]]:
         """
         Stream voice-clone audio chunks (single sample only).
 
         This method yields (wav_chunk, sample_rate) tuples as soon as each chunk is decoded.
+        match_voice=True enforces deterministic decoding unless sampling is explicitly requested.
         """
         if self.model.tts_model_type != "base":
             raise ValueError(
@@ -711,6 +750,17 @@ class Qwen3TTSModel:
             ref_id = self._tokenize_texts([self._build_ref_text(ref_text_for_ids)])[0]
 
         gen_kwargs = self._merge_generate_kwargs(**kwargs)
+        if match_voice:
+            if "do_sample" not in kwargs:
+                gen_kwargs["do_sample"] = False
+            if "subtalker_dosample" not in kwargs:
+                gen_kwargs["subtalker_dosample"] = False
+
+        def _stop_requested() -> bool:
+            return bool(should_stop()) if should_stop is not None else False
+
+        if _stop_requested():
+            return
 
         if self.model.speech_tokenizer.get_model_type() != "qwen3_tts_tokenizer_12hz":
             raise ValueError("Streaming decode currently supports only 12Hz tokenizer models.")
@@ -936,6 +986,9 @@ class Qwen3TTSModel:
             subtalker_temperature=gen_kwargs.get("subtalker_temperature"),
         )
 
+        if _stop_requested():
+            return
+
         next_token = _sample_next(prefill.logits[:, -1, :].squeeze(0), [])
         past_key_values = prefill.past_key_values
         past_hidden = prefill.past_hidden
@@ -955,7 +1008,11 @@ class Qwen3TTSModel:
         eos_token_id = int(self.model.config.talker_config.codec_eos_token_id)
         sample_rate = int(self.model.speech_tokenizer.get_output_sample_rate())
 
+        stopped = False
         for _ in range(max_new_tokens):
+            if _stop_requested():
+                stopped = True
+                break
             if next_token == eos_token_id:
                 break
 
@@ -975,6 +1032,10 @@ class Qwen3TTSModel:
                 subtalker_top_p=gen_kwargs.get("subtalker_top_p"),
                 subtalker_temperature=gen_kwargs.get("subtalker_temperature"),
             )
+
+            if _stop_requested():
+                stopped = True
+                break
 
             codec_ids = output.hidden_states[1]
             if codec_ids is None:
@@ -1004,7 +1065,7 @@ class Qwen3TTSModel:
             generation_step = output.generation_step
             next_token = _sample_next(output.logits[:, -1, :].squeeze(0), prev_tokens)
 
-        if pending_codes:
+        if pending_codes and not stopped:
             chunk = torch.stack(pending_codes, dim=0)
             if context_codes is not None and context_codes.numel() > 0:
                 decode_codes = torch.cat([context_codes, chunk], dim=0)

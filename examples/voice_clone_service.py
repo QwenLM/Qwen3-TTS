@@ -194,7 +194,7 @@ def _add_voice_meta(voice_id: str, meta: Dict[str, Any]) -> None:
         _save_voice_index(INDEX_PATH, VOICE_INDEX)
 
 
-def _build_voice_choices() -> Tuple[List[str], Dict[str, str]]:
+def _build_voice_choices(model_id: Optional[str] = None) -> Tuple[List[str], Dict[str, str]]:
     with VOICE_INDEX_LOCK:
         voices = dict(VOICE_INDEX)
     items = list(voices.items())
@@ -202,6 +202,9 @@ def _build_voice_choices() -> Tuple[List[str], Dict[str, str]]:
     choices: List[str] = []
     mapping: Dict[str, str] = {}
     for voice_id, meta in items:
+        voice_model = meta.get("model_id")
+        if model_id and voice_model != model_id:
+            continue
         name = meta.get("name") or voice_id[:8]
         disp = f"{name} ({voice_id[:8]})"
         choices.append(disp)
@@ -267,6 +270,45 @@ def _load_prompt_items(voice_id: str) -> Tuple[List[VoiceClonePromptItem], Dict[
     return items, prompt_meta
 
 
+def _validate_prompt_items(items: List[VoiceClonePromptItem], tts: Qwen3TTSModel) -> None:
+    vocab_size = int(tts.model.talker.config.vocab_size)
+    num_groups = int(tts.model.talker.config.num_code_groups)
+    hidden_size = int(tts.model.talker.config.hidden_size)
+    for idx, item in enumerate(items):
+        ref_code = item.ref_code
+        if ref_code is not None:
+            if not torch.is_tensor(ref_code):
+                ref_code = torch.tensor(ref_code)
+            if ref_code.dim() != 2 or ref_code.shape[1] != num_groups:
+                raise ValueError(
+                    f"ref_code shape mismatch for prompt[{idx}]: "
+                    f"expected (*, {num_groups}), got {tuple(ref_code.shape)}."
+                )
+            if ref_code.dtype not in (torch.int64, torch.int32, torch.int16, torch.uint8):
+                ref_code = ref_code.long()
+            if ref_code.numel() > 0:
+                min_id = int(ref_code.min().item())
+                max_id = int(ref_code.max().item())
+                if min_id < 0 or max_id >= vocab_size:
+                    raise ValueError(
+                        f"ref_code out of range for model vocab_size={vocab_size}: min={min_id}, max={max_id}. "
+                        "Recreate the voice prompt with the same model."
+                    )
+            item.ref_code = ref_code
+
+        ref_spk = item.ref_spk_embedding
+        if ref_spk is None:
+            raise ValueError(f"Missing ref_spk_embedding in prompt[{idx}].")
+        if not torch.is_tensor(ref_spk):
+            ref_spk = torch.tensor(ref_spk)
+        if ref_spk.dim() != 1 or int(ref_spk.shape[0]) != hidden_size:
+            raise ValueError(
+                f"ref_spk_embedding size mismatch for prompt[{idx}]: expected {hidden_size}, got {tuple(ref_spk.shape)}. "
+                "Recreate the voice prompt with the same model."
+            )
+        item.ref_spk_embedding = ref_spk
+
+
 def _load_tts(
     model_id: str,
     device: str,
@@ -315,24 +357,45 @@ def build_app(args: argparse.Namespace) -> gr.Blocks:
         tts = _load_tts(args.model, args.device, _dtype_from_str(args.dtype), args.flash_attn, args.cache_models)
 
     lang_choices, lang_map = _get_lang_choices(tts)
-    voice_choices, voice_map = _build_voice_choices()
+    voice_choices, voice_map = _build_voice_choices(args.model)
 
     gen_kwargs_default = _collect_gen_kwargs(args)
 
-    def switch_model(model_label: str, cur_model: str, cur_lang_map: Dict[str, str]):
+    def switch_model(
+        model_label: str,
+        cur_model: str,
+        cur_lang_map: Dict[str, str],
+        cur_voice_map: Dict[str, str],
+    ):
         model_id = model_label_map.get(model_label, model_label)
         try:
             with MODEL_LOCK:
                 tts_local = _load_tts(model_id, args.device, _dtype_from_str(args.dtype), args.flash_attn, args.cache_models)
             choices, mapping = _get_lang_choices(tts_local)
             value = "Auto" if "Auto" in choices else (choices[0] if choices else None)
+            voice_choices, voice_map = _build_voice_choices(model_id)
+            voice_value = voice_choices[0] if voice_choices else None
             status = f"Loaded {model_id}"
-            return status, gr.update(choices=choices, value=value), model_id, mapping
+            return (
+                status,
+                gr.update(choices=choices, value=value),
+                model_id,
+                mapping,
+                gr.update(choices=voice_choices, value=voice_value),
+                voice_map,
+            )
         except Exception as e:
-            return f"Failed to load model: {type(e).__name__}: {e}", gr.update(), cur_model, cur_lang_map
+            return (
+                f"Failed to load model: {type(e).__name__}: {e}",
+                gr.update(),
+                cur_model,
+                cur_lang_map,
+                gr.update(),
+                cur_voice_map,
+            )
 
-    def refresh_voices():
-        choices, mapping = _build_voice_choices()
+    def refresh_voices(cur_model: str):
+        choices, mapping = _build_voice_choices(cur_model)
         value = choices[0] if choices else None
         return gr.update(choices=choices, value=value), mapping
 
@@ -378,7 +441,7 @@ def build_app(args: argparse.Namespace) -> gr.Blocks:
             with PROMPT_CACHE_LOCK:
                 PROMPT_CACHE[voice_id] = (items, payload["meta"])
 
-            choices, mapping = _build_voice_choices()
+            choices, mapping = _build_voice_choices(cur_model)
             value = choices[0] if choices else None
             status = f"Saved voice '{name}' ({voice_id})."
             return status, gr.update(choices=choices, value=value), mapping
@@ -407,8 +470,13 @@ def build_app(args: argparse.Namespace) -> gr.Blocks:
             if prompt_model and prompt_model != cur_model:
                 return None, f"Voice created with {prompt_model}. Switch model to match."
 
-            language = lang_map_local.get(lang_disp, "Auto")
             tts_local = _get_current_tts()
+            try:
+                _validate_prompt_items(items, tts_local)
+            except ValueError as exc:
+                return None, str(exc)
+
+            language = lang_map_local.get(lang_disp, "Auto")
             with MODEL_LOCK:
                 wavs, sr = tts_local.generate_voice_clone(
                     text=text.strip(),
@@ -481,11 +549,12 @@ def build_app(args: argparse.Namespace) -> gr.Blocks:
 
         load_btn.click(
             switch_model,
-            inputs=[model_dd, model_state, lang_state],
-            outputs=[model_status, lang_in, model_state, lang_state],
+            inputs=[model_dd, model_state, lang_state, voice_map_state],
+            outputs=[model_status, lang_in, model_state, lang_state, voice_dd, voice_map_state],
         )
         refresh_btn.click(
             refresh_voices,
+            inputs=[model_state],
             outputs=[voice_dd, voice_map_state],
         )
         save_btn.click(

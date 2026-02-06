@@ -1,6 +1,10 @@
 # Voice Clone Streaming Service (SSE)
 
-This service streams voice-clone audio chunks as Server-Sent Events (SSE).
+# Streaming voice cloning service
+
+This service streams voice-clone audio chunks as Server-Sent Events (SSE) or binary PCM.
+
+Files live under `examples/streaming/`.
 
 Constraints
 - Single-sample only (one `text`, one `voice_id` per request).
@@ -28,6 +32,22 @@ curl -N -X POST \
     "left_context_size": 25
   }' \
   http://localhost:8002/voice/stream
+```
+
+Binary PCM stream
+```text
+POST /voice/stream_pcm
+
+Binary protocol:
+- 12-byte header:
+  - magic: "QTS1" (4 bytes)
+  - sample_rate: uint32 LE
+  - sample_width_bytes: uint16 LE (2 for int16)
+  - channels: uint16 LE (1)
+- Then repeated frames:
+  - frame_len_bytes: uint32 LE
+  - raw PCM int16 bytes
+- End of stream: frame_len_bytes = 0
 ```
 
 Model switching

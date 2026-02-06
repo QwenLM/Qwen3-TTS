@@ -23,6 +23,7 @@ from qwen_tts import Qwen3TTSModel, VoiceClonePromptItem
 
 
 MODEL_LOCK = threading.Lock()
+STREAM_CANCEL_EVENT = threading.Event()
 CURRENT_TTS: Optional[Qwen3TTSModel] = None
 CURRENT_MODEL_ID: Optional[str] = None
 CURRENT_CONFIG: Dict[str, Any] = {
@@ -181,6 +182,7 @@ def _load_prompt_items(voice_id: str) -> Tuple[List[VoiceClonePromptItem], Dict[
 def _validate_prompt_items(items: List[VoiceClonePromptItem], tts: Qwen3TTSModel) -> None:
     vocab_size = int(tts.model.talker.config.vocab_size)
     num_groups = int(tts.model.talker.config.num_code_groups)
+    hidden_size = int(tts.model.talker.config.hidden_size)
     for idx, item in enumerate(items):
         ref_code = item.ref_code
         if ref_code is None:
@@ -201,8 +203,20 @@ def _validate_prompt_items(items: List[VoiceClonePromptItem], tts: Qwen3TTSModel
                 raise ValueError(
                     f"ref_code out of range for model vocab_size={vocab_size}: min={min_id}, max={max_id}. "
                     "Recreate the voice prompt with the same model."
-                )
+            )
         item.ref_code = ref_code
+
+        ref_spk = item.ref_spk_embedding
+        if ref_spk is None:
+            raise ValueError(f"Missing ref_spk_embedding in prompt[{idx}].")
+        if not torch.is_tensor(ref_spk):
+            ref_spk = torch.tensor(ref_spk)
+        if ref_spk.dim() != 1 or int(ref_spk.shape[0]) != hidden_size:
+            raise ValueError(
+                f"ref_spk_embedding size mismatch for prompt[{idx}]: expected {hidden_size}, got {tuple(ref_spk.shape)}. "
+                "Recreate the voice prompt with the same model."
+            )
+        item.ref_spk_embedding = ref_spk
 
 
 def _load_tts(model_id: str, device: str, dtype: torch.dtype, flash_attn: bool) -> Qwen3TTSModel:
@@ -247,6 +261,7 @@ class ModelLoadRequest(BaseModel):
     tf32: Optional[bool] = None
     clear_cache: bool = True
     safe_mode: Optional[bool] = None
+    wait_timeout_sec: Optional[float] = None
 
 
 def build_app(args: argparse.Namespace) -> FastAPI:
@@ -274,13 +289,14 @@ def build_app(args: argparse.Namespace) -> FastAPI:
             "flash_attn": CURRENT_CONFIG.get("flash_attn"),
             "tf32": CURRENT_CONFIG.get("tf32"),
             "safe_mode": CURRENT_CONFIG.get("safe_mode"),
+            "busy": MODEL_LOCK.locked(),
         }
 
     @app.get("/models")
     def list_models():
         with VOICE_INDEX_LOCK:
             voices = list(VOICE_INDEX.values())
-        models = sorted({meta.get("model_id") for meta in voices if meta.get("model_id")})
+        models = sorted([meta["model_id"] for meta in voices if meta.get("model_id")])
         return {"models": models}
 
     @app.get("/voices")
@@ -304,6 +320,7 @@ def build_app(args: argparse.Namespace) -> FastAPI:
         tts = CURRENT_TTS
         if tts is None:
             raise HTTPException(status_code=500, detail="Model not loaded.")
+        assert tts is not None
         try:
             _validate_prompt_items(items, tts)
         except ValueError as exc:
@@ -322,38 +339,137 @@ def build_app(args: argparse.Namespace) -> FastAPI:
             "max_new_tokens": payload.max_new_tokens,
         }
         gen_kwargs = {k: v for k, v in gen_kwargs.items() if v is not None}
+        if CURRENT_MODEL_ID and "0.6B" in CURRENT_MODEL_ID:
+            gen_kwargs.setdefault("subtalker_dosample", False)
         if CURRENT_CONFIG.get("safe_mode"):
+            gen_kwargs.setdefault("do_sample", False)
             gen_kwargs.setdefault("subtalker_dosample", False)
 
+        if not MODEL_LOCK.acquire(blocking=False):
+            raise HTTPException(status_code=409, detail="Model is busy. Stop current stream first.")
+        STREAM_CANCEL_EVENT.clear()
+
         def _iter_events():
-            header = {"sr": int(tts.model.speech_tokenizer.get_output_sample_rate()), "dtype": "int16"}
-            yield f"event:meta\ndata:{json.dumps(header)}\n\n"
-            chunk_idx = 0
-            with MODEL_LOCK:
+            try:
+                speech_tokenizer = tts.model.speech_tokenizer
+                if speech_tokenizer is None:
+                    raise HTTPException(status_code=500, detail="Speech tokenizer missing.")
+                header = {"sr": int(speech_tokenizer.get_output_sample_rate()), "dtype": "int16"}
+                yield f"event:meta\ndata:{json.dumps(header)}\n\n"
+                chunk_idx = 0
                 for wav_chunk, sr in tts.generate_voice_clone_stream(
                     text=payload.text,
                     language=payload.language,
                     voice_clone_prompt=items,
                     chunk_size=payload.chunk_size,
                     left_context_size=payload.left_context_size,
+                    should_stop=STREAM_CANCEL_EVENT.is_set,
                     **gen_kwargs,
                 ):
+                    if STREAM_CANCEL_EVENT.is_set():
+                        break
                     pcm16 = (np.clip(wav_chunk, -1.0, 1.0) * 32767.0).astype(np.int16)
                     b64 = base64.b64encode(pcm16.tobytes()).decode("ascii")
                     data = {"i": chunk_idx, "sr": sr, "audio": b64}
                     yield f"data:{json.dumps(data)}\n\n"
                     chunk_idx += 1
-            yield "event:end\ndata:done\n\n"
+                yield "event:end\ndata:done\n\n"
+            finally:
+                MODEL_LOCK.release()
 
         headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
         return StreamingResponse(_iter_events(), media_type="text/event-stream", headers=headers)
+
+    @app.post("/voice/stream_pcm")
+    def voice_stream_pcm(payload: StreamRequest):
+        if not payload.text.strip():
+            raise HTTPException(status_code=400, detail="Target text is required.")
+        try:
+            items, prompt_meta = _load_prompt_items(payload.voice_id)
+        except Exception as e:
+            raise HTTPException(status_code=404, detail=str(e))
+
+        prompt_model = prompt_meta.get("model_id")
+        if prompt_model and prompt_model != CURRENT_MODEL_ID:
+            raise HTTPException(status_code=400, detail=f"Voice created with {prompt_model}. Switch model to match.")
+        tts = CURRENT_TTS
+        if tts is None:
+            raise HTTPException(status_code=500, detail="Model not loaded.")
+        assert tts is not None
+        try:
+            _validate_prompt_items(items, tts)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        gen_kwargs = {
+            "do_sample": payload.do_sample,
+            "top_k": payload.top_k,
+            "top_p": payload.top_p,
+            "temperature": payload.temperature,
+            "repetition_penalty": payload.repetition_penalty,
+            "subtalker_dosample": payload.subtalker_dosample,
+            "subtalker_top_k": payload.subtalker_top_k,
+            "subtalker_top_p": payload.subtalker_top_p,
+            "subtalker_temperature": payload.subtalker_temperature,
+            "max_new_tokens": payload.max_new_tokens,
+        }
+        gen_kwargs = {k: v for k, v in gen_kwargs.items() if v is not None}
+        if CURRENT_MODEL_ID and "0.6B" in CURRENT_MODEL_ID:
+            gen_kwargs.setdefault("subtalker_dosample", False)
+        if CURRENT_CONFIG.get("safe_mode"):
+            gen_kwargs.setdefault("do_sample", False)
+            gen_kwargs.setdefault("subtalker_dosample", False)
+
+        if not MODEL_LOCK.acquire(blocking=False):
+            raise HTTPException(status_code=409, detail="Model is busy. Stop current stream first.")
+        STREAM_CANCEL_EVENT.clear()
+
+        def _iter_pcm():
+            try:
+                speech_tokenizer = tts.model.speech_tokenizer
+                if speech_tokenizer is None:
+                    raise HTTPException(status_code=500, detail="Speech tokenizer missing.")
+                sr = int(speech_tokenizer.get_output_sample_rate())
+                header = b"QTS1" + sr.to_bytes(4, "little") + (2).to_bytes(2, "little") + (1).to_bytes(2, "little")
+                yield header
+                for wav_chunk, _ in tts.generate_voice_clone_stream(
+                    text=payload.text,
+                    language=payload.language,
+                    voice_clone_prompt=items,
+                    chunk_size=payload.chunk_size,
+                    left_context_size=payload.left_context_size,
+                    should_stop=STREAM_CANCEL_EVENT.is_set,
+                    **gen_kwargs,
+                ):
+                    if STREAM_CANCEL_EVENT.is_set():
+                        break
+                    pcm16 = (np.clip(wav_chunk, -1.0, 1.0) * 32767.0).astype(np.int16)
+                    pcm_bytes = pcm16.tobytes()
+                    yield len(pcm_bytes).to_bytes(4, "little")
+                    if pcm_bytes:
+                        yield pcm_bytes
+                yield (0).to_bytes(4, "little")
+            finally:
+                MODEL_LOCK.release()
+
+        headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+        return StreamingResponse(_iter_pcm(), media_type="application/octet-stream", headers=headers)
 
     @app.post("/model/load")
     def load_model(payload: ModelLoadRequest):
         model_id = (payload.model_id or "").strip()
         if not model_id:
             raise HTTPException(status_code=400, detail="model_id is required.")
-        if not MODEL_LOCK.acquire(blocking=False):
+        wait_timeout = payload.wait_timeout_sec
+        if wait_timeout is None:
+            acquired = MODEL_LOCK.acquire(blocking=False)
+        else:
+            try:
+                timeout_value = max(0.0, float(wait_timeout))
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="wait_timeout_sec must be a number.")
+            acquired = MODEL_LOCK.acquire(timeout=timeout_value)
+        if not acquired:
             raise HTTPException(status_code=409, detail="Model is busy. Wait for streaming to finish.")
         try:
             current_device = CURRENT_CONFIG.get("device") or args.device
@@ -383,6 +499,11 @@ def build_app(args: argparse.Namespace) -> FastAPI:
         finally:
             MODEL_LOCK.release()
 
+    @app.post("/voice/stop")
+    def stop_voice_stream():
+        STREAM_CANCEL_EVENT.set()
+        return {"status": "ok"}
+
     return app
 
 
@@ -401,9 +522,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device", default="cuda:0", help="Device for device_map, e.g. cpu, cuda:0.")
     parser.add_argument(
         "--dtype",
-        default="float16",
+        default="bfloat16",
         choices=["bfloat16", "bf16", "float16", "fp16", "float32", "fp32"],
-        help="Torch dtype for loading the model (default: float16).",
+        help="Torch dtype for loading the model (default: bfloat16).",
     )
     parser.add_argument(
         "--flash-attn/--no-flash-attn",
