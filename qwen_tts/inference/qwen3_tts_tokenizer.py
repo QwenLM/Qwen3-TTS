@@ -84,6 +84,13 @@ class Qwen3TTSTokenizer:
         AutoConfig.register("qwen3_tts_tokenizer_12hz", Qwen3TTSTokenizerV2Config)
         AutoModel.register(Qwen3TTSTokenizerV2Config, Qwen3TTSTokenizerV2Model)
 
+        torch_dtype = kwargs.pop("torch_dtype", None)
+        dtype = kwargs.pop("dtype", None)
+        if dtype is None and torch_dtype is not None:
+            dtype = torch_dtype
+        if dtype is not None:
+            kwargs["torch_dtype"] = _normalize_torch_dtype(dtype)
+
         inst.feature_extractor = AutoFeatureExtractor.from_pretrained(pretrained_model_name_or_path)
         inst.model = AutoModel.from_pretrained(pretrained_model_name_or_path, **kwargs)
         inst.config = inst.model.config
@@ -409,3 +416,21 @@ class Qwen3TTSTokenizer:
             int: Decode upsample rate.
         """
         return int(self.model.get_decode_upsample_rate())
+
+
+def _normalize_torch_dtype(dtype: Union[str, torch.dtype]) -> torch.dtype:
+    if isinstance(dtype, torch.dtype):
+        return dtype
+    if isinstance(dtype, str):
+        key = dtype.strip().lower()
+        mapping = {
+            "bf16": torch.bfloat16,
+            "bfloat16": torch.bfloat16,
+            "fp16": torch.float16,
+            "float16": torch.float16,
+            "fp32": torch.float32,
+            "float32": torch.float32,
+        }
+        if key in mapping:
+            return mapping[key]
+    raise ValueError(f"Unsupported torch dtype: {dtype}")
