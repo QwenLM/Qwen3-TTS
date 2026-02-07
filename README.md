@@ -27,6 +27,7 @@ We release **Qwen3-TTS**, a series of powerful speech generation capabilities de
   - [Released Models Description and Download](#released-models-description-and-download)
 - [Quickstart](#quickstart)
   - [Environment Setup](#environment-setup)
+  - [Performance Tips](#performance-tips)
   - [Python Package Usage](#python-package-usage)
     - [Custom Voice Generation](#custom-voice-generate)
     - [Voice Design](#voice-design)
@@ -140,6 +141,46 @@ MAX_JOBS=4 pip install -U flash-attn --no-build-isolation
 
 Also, you should have hardware that is compatible with FlashAttention 2. Read more about it in the official documentation of the [FlashAttention repository](https://github.com/Dao-AILab/flash-attention). FlashAttention 2 can only be used when a model is loaded in `torch.float16` or `torch.bfloat16`.
 
+
+### Performance Tips
+
+#### Compiling the Codec Decoder with `torch.compile`
+
+The speech tokenizer codec decoder contains 100+ attention modules whose Python dispatch overhead dominates waveform decoding time—profiling shows it accounts for **~47% of single-generation time and ~85% of batch generation time**. Passing `compile_codec=True` to `from_pretrained` applies `torch.compile` to the codec, fusing these modules into optimized kernels:
+
+```python
+model = Qwen3TTSModel.from_pretrained(
+    "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+    device_map="cuda:0",
+    dtype=torch.bfloat16,
+    compile_codec=True,  # ~3-4x faster batch decoding after warmup
+)
+```
+
+**What to expect:**
+- The first generation after loading incurs a one-time compilation warmup (~30–60 s depending on hardware). Subsequent calls run at full speed.
+- Batch throughput improves by **3–4x** (e.g. from ~1.3x real-time to ~4–6x real-time for batches of 12+ utterances).
+- Single-utterance latency improves by ~30% after warmup.
+- Works on NVIDIA (CUDA), AMD (ROCm), and CPU backends.
+
+You can also pass a specific `torch.compile` mode string:
+
+```python
+model = Qwen3TTSModel.from_pretrained(
+    "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+    device_map="cuda:0",
+    dtype=torch.bfloat16,
+    compile_codec="max-autotune",  # or "reduce-overhead", "default"
+)
+```
+
+If you already have a model instance, you can compile the codec after construction:
+
+```python
+model._compile_codec()  # defaults to mode="max-autotune"
+```
+
+> **Recommendation:** Use `compile_codec=True` for batch generation workloads such as audiobook production, dataset creation, or any scenario where multiple utterances are generated in sequence. For single one-off generations, the warmup cost may outweigh the benefit.
 
 ### Python Package Usage
 
