@@ -71,15 +71,12 @@ class TestTalkerInstantiation:
         assert talker.codec_head is not None
         assert talker.code_predictor is not None
 
-    def test_get_embeddings(self, small_talker_config):
-        """Test that embedding accessors work."""
+    def test_embedding_properties(self, small_talker_config):
+        """Test that embedding properties work."""
         talker = Talker(small_talker_config)
         
-        input_embeddings = talker.get_input_embeddings()
-        text_embeddings = talker.get_text_embeddings()
-        
-        assert input_embeddings is not None
-        assert text_embeddings is not None
+        assert talker.codec_embedding is not None
+        assert talker.text_embedding is not None
 
 
 class TestTalkerForward:

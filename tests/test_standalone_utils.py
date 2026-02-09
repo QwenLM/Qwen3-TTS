@@ -265,38 +265,14 @@ class TestRoPE:
 class TestMasking:
     """Tests for standalone masking utilities."""
 
-    def test_create_causal_mask_sdpa_returns_none(self):
-        """Test create_causal_mask returns None for SDPA when no attention mask."""
+    def test_create_causal_mask_with_cache_position(self):
+        """Test create_causal_mask with cache_position."""
         from qwen3_tts_standalone.utils import create_causal_mask
-        
-        class MockConfig:
-            _attn_implementation = "sdpa"
-        
-        input_embeds = torch.randn(2, 10, 256)
-        cache_position = torch.arange(10)
-        
-        mask = create_causal_mask(
-            config=MockConfig(),
-            input_embeds=input_embeds,
-            attention_mask=None,
-            cache_position=cache_position,
-            past_key_values=None,
-        )
-        
-        assert mask is None
-
-    def test_create_causal_mask_eager(self):
-        """Test create_causal_mask creates proper mask for eager attention."""
-        from qwen3_tts_standalone.utils import create_causal_mask
-        
-        class MockConfig:
-            _attn_implementation = "eager"
         
         input_embeds = torch.randn(2, 5, 256)
         cache_position = torch.arange(5)
         
         mask = create_causal_mask(
-            config=MockConfig(),
             input_embeds=input_embeds,
             attention_mask=None,
             cache_position=cache_position,
@@ -307,13 +283,192 @@ class TestMasking:
         assert mask.shape == (1, 1, 5, 5)
         
         # Check causal pattern: position i can attend to positions 0..i
-        # Non-masked positions should be 0, masked should be -inf
         for i in range(5):
             # Can attend to positions <= i (should be 0)
             assert (mask[0, 0, i, :i+1] == 0).all()
             # Cannot attend to positions > i (should be -inf)
             if i < 4:
                 assert (mask[0, 0, i, i+1:] < -1e30).all()
+
+    def test_create_causal_mask_without_cache_position(self):
+        """Test create_causal_mask without cache_position (standard causal)."""
+        from qwen3_tts_standalone.utils import create_causal_mask
+        
+        input_embeds = torch.randn(2, 5, 256)
+        
+        mask = create_causal_mask(
+            input_embeds=input_embeds,
+            attention_mask=None,
+            cache_position=None,
+            past_key_values=None,
+        )
+        
+        assert mask.shape == (1, 1, 5, 5)
+        
+        # Should be identical to the cache_position case when starting fresh
+        for i in range(5):
+            assert (mask[0, 0, i, :i+1] == 0).all()
+            if i < 4:
+                assert (mask[0, 0, i, i+1:] < -1e30).all()
+
+    def test_create_causal_mask_with_past_key_values(self):
+        """Test create_causal_mask with past key values (kv cache)."""
+        from qwen3_tts_standalone.utils import create_causal_mask, DynamicCache
+        
+        # Simulate having 3 past tokens cached
+        past_len = 3
+        cache = DynamicCache()
+        # Add dummy cached values to set the length
+        cache.update(
+            torch.randn(1, 4, past_len, 64),  # key
+            torch.randn(1, 4, past_len, 64),  # value
+            layer_idx=0,
+        )
+        
+        # Now processing 2 new tokens
+        input_embeds = torch.randn(1, 2, 256)
+        cache_position = torch.tensor([3, 4])  # positions 3 and 4
+        
+        mask = create_causal_mask(
+            input_embeds=input_embeds,
+            attention_mask=None,
+            cache_position=cache_position,
+            past_key_values=cache,
+        )
+        
+        # Shape: (1, 1, 2, 5) - 2 queries, 5 key/values (3 past + 2 new)
+        assert mask.shape == (1, 1, 2, 5)
+        
+        # Query 0 (position 3) can attend to kv positions 0-3
+        assert (mask[0, 0, 0, :4] == 0).all()
+        assert (mask[0, 0, 0, 4:] < -1e30).all()
+        
+        # Query 1 (position 4) can attend to kv positions 0-4
+        assert (mask[0, 0, 1, :5] == 0).all()
+
+    def test_create_causal_mask_with_attention_mask(self):
+        """Test create_causal_mask with padding attention mask."""
+        from qwen3_tts_standalone.utils import create_causal_mask
+        
+        batch_size = 2
+        seq_len = 4
+        input_embeds = torch.randn(batch_size, seq_len, 256)
+        cache_position = torch.arange(seq_len)
+        
+        # attention_mask: 1 = attend, 0 = ignore (padding)
+        # First sequence: all valid, Second sequence: last position is padding
+        attention_mask = torch.tensor([
+            [1, 1, 1, 1],
+            [1, 1, 1, 0],
+        ], dtype=torch.float32)
+        
+        mask = create_causal_mask(
+            input_embeds=input_embeds,
+            attention_mask=attention_mask,
+            cache_position=cache_position,
+            past_key_values=None,
+        )
+        
+        assert mask.shape == (batch_size, 1, seq_len, seq_len)
+        
+        # First batch: standard causal mask
+        for i in range(seq_len):
+            assert (mask[0, 0, i, :i+1] == 0).all()
+        
+        # Second batch: position 3 should be masked for all queries
+        assert (mask[1, 0, :, 3] < -1e30).all()
+
+    def test_create_sliding_window_causal_mask_with_cache_position(self):
+        """Test create_sliding_window_causal_mask with cache_position."""
+        from qwen3_tts_standalone.utils import create_sliding_window_causal_mask
+        
+        input_embeds = torch.randn(2, 8, 256)
+        cache_position = torch.arange(8)
+        sliding_window = 3
+        
+        mask = create_sliding_window_causal_mask(
+            input_embeds=input_embeds,
+            attention_mask=None,
+            cache_position=cache_position,
+            past_key_values=None,
+            sliding_window=sliding_window,
+        )
+        
+        assert mask.shape == (1, 1, 8, 8)
+        
+        # Check sliding window causal pattern
+        for i in range(8):
+            start = max(0, i - sliding_window + 1)
+            # Can attend within window
+            assert (mask[0, 0, i, start:i+1] == 0).all()
+            # Cannot attend before window
+            if start > 0:
+                assert (mask[0, 0, i, :start] < -1e30).all()
+            # Cannot attend to future
+            if i < 7:
+                assert (mask[0, 0, i, i+1:] < -1e30).all()
+
+    def test_create_sliding_window_causal_mask_without_cache_position(self):
+        """Test create_sliding_window_causal_mask without cache_position."""
+        from qwen3_tts_standalone.utils import create_sliding_window_causal_mask
+        
+        input_embeds = torch.randn(1, 6, 256)
+        sliding_window = 2
+        
+        mask = create_sliding_window_causal_mask(
+            input_embeds=input_embeds,
+            attention_mask=None,
+            cache_position=None,
+            past_key_values=None,
+            sliding_window=sliding_window,
+        )
+        
+        assert mask.shape == (1, 1, 6, 6)
+        
+        # With window=2: position i can attend to [max(0, i-1), i]
+        # Position 0: attend to [0]
+        # Position 1: attend to [0, 1]
+        # Position 2: attend to [1, 2]
+        # etc.
+        for i in range(6):
+            start = max(0, i - sliding_window + 1)
+            assert (mask[0, 0, i, start:i+1] == 0).all()
+
+    def test_create_sliding_window_with_past_key_values(self):
+        """Test sliding window mask with past key values."""
+        from qwen3_tts_standalone.utils import create_sliding_window_causal_mask, DynamicCache
+        
+        past_len = 5
+        cache = DynamicCache()
+        cache.update(
+            torch.randn(1, 4, past_len, 64),
+            torch.randn(1, 4, past_len, 64),
+            layer_idx=0,
+        )
+        
+        input_embeds = torch.randn(1, 2, 256)
+        cache_position = torch.tensor([5, 6])  # continuing from position 5
+        sliding_window = 3
+        
+        mask = create_sliding_window_causal_mask(
+            input_embeds=input_embeds,
+            attention_mask=None,
+            cache_position=cache_position,
+            past_key_values=cache,
+            sliding_window=sliding_window,
+        )
+        
+        # Shape: (1, 1, 2, 7) - 2 queries, 7 key/values (5 past + 2 new)
+        assert mask.shape == (1, 1, 2, 7)
+        
+        # Query 0 (position 5) with window=3: can attend to kv positions [3, 4, 5]
+        assert (mask[0, 0, 0, :3] < -1e30).all()  # positions 0-2 masked
+        assert (mask[0, 0, 0, 3:6] == 0).all()    # positions 3-5 visible
+        assert (mask[0, 0, 0, 6:] < -1e30).all()  # position 6 (future) masked
+        
+        # Query 1 (position 6) with window=3: can attend to kv positions [4, 5, 6]
+        assert (mask[0, 0, 1, :4] < -1e30).all()  # positions 0-3 masked
+        assert (mask[0, 0, 1, 4:7] == 0).all()    # positions 4-6 visible
 
 
 class TestAttentionFunctions:

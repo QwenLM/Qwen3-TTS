@@ -264,7 +264,7 @@ class TTS(BaseModel):
         """Build in-context learning prompt for voice cloning."""
         # Text embed: (ref id + text id + eos) [1, T1, D]
         text_embed = self.talker.text_projection(
-            self.talker.get_text_embeddings()(torch.cat([ref_id, text_id], dim=-1))
+            self.talker.text_embedding(torch.cat([ref_id, text_id], dim=-1))
         )
         text_embed = torch.cat([text_embed, tts_eos_embed], dim=1)
         
@@ -272,14 +272,14 @@ class TTS(BaseModel):
         codec_embed = []
         for i in range(self.talker.num_code_groups):
             if i == 0:
-                codec_embed.append(self.talker.get_input_embeddings()(ref_code[:, :1]))
+                codec_embed.append(self.talker.codec_embedding(ref_code[:, :1]))
             else:
                 codec_embed.append(
                     self.talker.code_predictor.codec_embedding[i-1](ref_code[:, i:i+1])
                 )
         codec_embed = torch.cat(codec_embed, dim=1).sum(1).unsqueeze(0)
         
-        codec_bos = self.talker.get_input_embeddings()(
+        codec_bos = self.talker.codec_embedding(
             torch.tensor(
                 [[self.config.talker_config.codec_bos_id]],
                 device=self.talker.device,
@@ -293,7 +293,7 @@ class TTS(BaseModel):
         codec_lens = codec_embed.shape[1]
         
         if non_streaming_mode:
-            icl_input_embed = text_embed + self.talker.get_input_embeddings()(
+            icl_input_embed = text_embed + self.talker.codec_embedding(
                 torch.tensor(
                     [[self.config.talker_config.codec_pad_id] * text_lens],
                     device=self.talker.device,
@@ -386,7 +386,7 @@ class TTS(BaseModel):
                 if instruct_id is not None:
                     talker_input_embeds[index].append(
                         self.talker.text_projection(
-                            self.talker.get_text_embeddings()(instruct_id)
+                            self.talker.text_embedding(instruct_id)
                         )
                     )
         
@@ -414,7 +414,7 @@ class TTS(BaseModel):
             
             # Build role embedding
             role_embed = self.talker.text_projection(
-                self.talker.get_text_embeddings()(input_id[:, :3])
+                self.talker.text_embedding(input_id[:, :3])
             )
             
             # Build initial input embedding
@@ -444,24 +444,24 @@ class TTS(BaseModel):
             else:
                 # Add first text token
                 first_text_embed = self.talker.text_projection(
-                    self.talker.get_text_embeddings()(input_id[:, 3:4])
+                    self.talker.text_embedding(input_id[:, 3:4])
                 ) + codec_input_embedding[:, -1:]
                 talker_input_embed = torch.cat([talker_input_embed, first_text_embed], dim=1)
                 
                 if non_streaming_mode:
                     talker_input_embed = talker_input_embed[:, :-1]
                     remaining_text = self.talker.text_projection(
-                        self.talker.get_text_embeddings()(input_id[:, 3:-5])
+                        self.talker.text_embedding(input_id[:, 3:-5])
                     )
                     remaining_text = torch.cat((remaining_text, tts_eos_embed), dim=1)
-                    remaining_text = remaining_text + self.talker.get_input_embeddings()(
+                    remaining_text = remaining_text + self.talker.codec_embedding(
                         torch.tensor(
                             [[self.config.talker_config.codec_pad_id] * (input_id[:, 3:-5].shape[1] + 1)],
                             device=self.talker.device,
                             dtype=input_id.dtype,
                         )
                     )
-                    bos_embed = tts_pad_embed + self.talker.get_input_embeddings()(
+                    bos_embed = tts_pad_embed + self.talker.codec_embedding(
                         torch.tensor(
                             [[self.config.talker_config.codec_bos_id]],
                             device=self.talker.device,
@@ -475,7 +475,7 @@ class TTS(BaseModel):
                     trailing_text_hidden = tts_pad_embed
                 else:
                     remaining_text = self.talker.text_projection(
-                        self.talker.get_text_embeddings()(input_id[:, 4:-5])
+                        self.talker.text_embedding(input_id[:, 4:-5])
                     )
                     trailing_text_hidden = torch.cat((remaining_text, tts_eos_embed), dim=1)
             
@@ -606,7 +606,7 @@ class TTS(BaseModel):
             if speaker.lower() not in self.config.talker_config.spk_id:
                 raise NotImplementedError(f"Speaker {speaker} not implemented")
             spk_id = self.config.talker_config.spk_id[speaker.lower()]
-            return self.talker.get_input_embeddings()(
+            return self.talker.codec_embedding(
                 torch.tensor(spk_id, device=self.talker.device, dtype=dtype)
             )
         else:
@@ -652,7 +652,7 @@ class TTS(BaseModel):
             dtype=dtype,
         )
         special_embeds = self.talker.text_projection(
-            self.talker.get_text_embeddings()(special_ids)
+            self.talker.text_embedding(special_ids)
         )
         return special_embeds.chunk(3, dim=1)  # (bos, eos, pad)
     
@@ -679,10 +679,10 @@ class TTS(BaseModel):
                 tc.codec_think_eos_id,
             ]]
         
-        codec_embed_0 = self.talker.get_input_embeddings()(
+        codec_embed_0 = self.talker.codec_embedding(
             torch.tensor(codec_prefill_list, device=self.talker.device, dtype=dtype)
         )
-        codec_embed_1 = self.talker.get_input_embeddings()(
+        codec_embed_1 = self.talker.codec_embedding(
             torch.tensor(
                 [[tc.codec_pad_id, tc.codec_bos_id]],
                 device=self.talker.device,

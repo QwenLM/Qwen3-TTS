@@ -105,7 +105,7 @@ class CodePredictor(nn.Module):
 
     def load_original_state_dict(self, state_dict: dict[str, Tensor]) -> None:
         """
-        Load weights from the original Qwen3TTSTalkerCodePredictorModelStandaloneForConditionalGenerationStandalone.
+        Load weights from the original Qwen3TTSCodePredictorForConditionalGeneration model.
 
         Handles key remapping:
         - model.X -> X (removes 'model.' prefix)
@@ -132,8 +132,6 @@ class CodePredictor(nn.Module):
         temperature: float = 1.0,
         top_k: int = 50,
         top_p: float = 1.0,
-        output_hidden_states: bool = False,
-        return_dict_in_generate: bool = False,
         **kwargs: Any,  # Ignored - for API compatibility
     ) -> CodePredictorOutput:
         """
@@ -246,7 +244,6 @@ class CodePredictor(nn.Module):
 
         # Create causal mask
         causal_mask = create_causal_mask(
-            config=self.config,
             input_embeds=hidden_states,
             attention_mask=None,
             cache_position=cache_position,

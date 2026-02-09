@@ -104,12 +104,14 @@ class Talker(nn.Module):
     def dtype(self) -> torch.dtype:
         return next(self.parameters()).dtype
 
-    def get_input_embeddings(self) -> nn.Embedding:
-        """Return codec embedding layer."""
+    @property
+    def codec_embedding(self) -> nn.Embedding:
+        """Codec token embedding layer."""
         return self.model.codec_embedding
 
-    def get_text_embeddings(self) -> nn.Embedding:
-        """Return text embedding layer."""
+    @property
+    def text_embedding(self) -> nn.Embedding:
+        """Text token embedding layer."""
         return self.model.text_embedding
 
     def _compute_rope_position_ids(
@@ -212,7 +214,7 @@ class Talker(nn.Module):
         codec_ids: Optional[Tensor] = None
         if not is_prefill and past_hidden is not None and last_predicted_token is not None:
             # Get embedding of the last predicted first-codebook token
-            last_id_hidden = self.get_input_embeddings()(last_predicted_token)
+            last_id_hidden = self.codec_embedding(last_predicted_token)
 
             # Use code predictor to generate higher codebook tokens
             predictor_input = torch.cat((past_hidden, last_id_hidden), dim=1)
@@ -505,7 +507,7 @@ class Talker(nn.Module):
 
     def load_original_state_dict(self, state_dict: dict[str, Tensor]) -> None:
         """
-        Load weights from the original Qwen3TTSTalkerForConditionalGenerationStandalone model.
+        Load weights from the original Qwen3TTSTalkerForConditionalGeneration model.
 
         Handles key remapping between the original and refactored model structures.
         """
