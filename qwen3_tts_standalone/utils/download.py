@@ -9,10 +9,10 @@ import huggingface_hub
 from huggingface_hub import snapshot_download
 
 
-def download_weights_from_hf_specific(
+def download_weights_from_hf(
     model_name_or_path: str,
-    cache_dir: str | None,
-    allow_patterns: list[str],
+    cache_dir: str | None = None,
+    allow_patterns: list[str] | None = None,
     revision: str | None = None,
     ignore_patterns: str | list[str] | None = None,
 ) -> str:
@@ -28,13 +28,21 @@ def download_weights_from_hf_specific(
     Returns:
         The path to the downloaded model weights.
     """
-    assert len(allow_patterns) > 0
     local_only = huggingface_hub.constants.HF_HUB_OFFLINE
 
-    for allow_pattern in allow_patterns:
+    if allow_patterns:
+        for allow_pattern in allow_patterns:
+            hf_folder = snapshot_download(
+                model_name_or_path,
+                allow_patterns=allow_pattern,
+                ignore_patterns=ignore_patterns,
+                cache_dir=cache_dir,
+                revision=revision,
+                local_files_only=local_only,
+            )
+    else:
         hf_folder = snapshot_download(
             model_name_or_path,
-            allow_patterns=allow_pattern,
             ignore_patterns=ignore_patterns,
             cache_dir=cache_dir,
             revision=revision,
@@ -43,4 +51,4 @@ def download_weights_from_hf_specific(
     return hf_folder
 
 
-__all__ = ["download_weights_from_hf_specific"]
+__all__ = ["download_weights_from_hf"]

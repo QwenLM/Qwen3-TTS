@@ -28,9 +28,9 @@ import soundfile as sf
 import torch
 from huggingface_hub import hf_hub_download
 
-from ..core.models.configuration_qwen3_tts_standalone import Qwen3TTSConfigStandalone
-from ..core.models.processing_qwen3_tts_standalone import Qwen3TTSProcessorStandalone
-from ..core.models.tts_standalone import TTS
+from .configuration import TTSConfig
+from .processor import Processor
+from .tts import TTS
 
 AudioLike = Union[
     str,                     # wav path, URL, base64
@@ -55,7 +55,7 @@ class VoiceClonePromptItemStandalone:
     ref_text: Optional[str] = None
 
 
-class Qwen3TTSModelStandalone:
+class Qwen3TTSModel:
     """
     A HuggingFace-style wrapper for Qwen3 TTS models (CustomVoice/VoiceDesign/Base) that provides:
       - from_pretrained() initialization via AutoModel/AutoProcessor
@@ -84,7 +84,7 @@ class Qwen3TTSModelStandalone:
                 self.device = torch.device("cpu")
 
     @classmethod
-    def _load_config_from_path(cls, path: str) -> Qwen3TTSConfigStandalone:
+    def _load_config_from_path(cls, path: str) -> TTSConfig:
         """
         Load configuration from a local path or HuggingFace Hub.
         
@@ -92,7 +92,7 @@ class Qwen3TTSModelStandalone:
             path: Local directory path or HuggingFace repo id.
             
         Returns:
-            Qwen3TTSConfigStandalone instance.
+            TTSConfig instance.
         """
         if os.path.isdir(path):
             config_path = os.path.join(path, "config.json")
@@ -105,21 +105,21 @@ class Qwen3TTSModelStandalone:
         with open(config_path, "r", encoding="utf-8") as f:
             config_dict = json.load(f)
         
-        return Qwen3TTSConfigStandalone.from_dict(config_dict)
+        return TTSConfig.from_dict(config_dict)
 
     @classmethod
     def from_pretrained(
         cls,
         pretrained_model_name_or_path: str,
         **kwargs,
-    ) -> "Qwen3TTSModelStandalone":
+    ) -> "Qwen3TTSModel":
         """
         Load a Qwen3 TTS model and its processor.
 
         This method:
           1) Loads config from the model directory or HuggingFace Hub.
           2) Loads the model via TTS.from_pretrained().
-          3) Loads the processor via Qwen3TTSProcessorStandalone.from_pretrained().
+          3) Loads the processor via Processor.from_pretrained().
           4) Loads generation config from the model.
 
         Args:
@@ -145,7 +145,7 @@ class Qwen3TTSModelStandalone:
         
         # Load processor directly (no AutoProcessor registration needed)
         # Note: fix_mistral_regex is handled internally by transformers tokenizer
-        processor = Qwen3TTSProcessorStandalone.from_pretrained(
+        processor = Processor.from_pretrained(
             pretrained_model_name_or_path,
         )
 
@@ -907,3 +907,15 @@ class Qwen3TTSModelStandalone:
         if supported is None:
             return None
         return sorted(supported)
+
+
+# Backward compatibility aliases
+Qwen3TTSModelStandalone = Qwen3TTSModel
+
+
+__all__ = [
+    "Qwen3TTSModel",
+    "VoiceClonePromptItemStandalone",
+    # Backward compatibility
+    "Qwen3TTSModelStandalone",
+]

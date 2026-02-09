@@ -162,7 +162,7 @@ def main():
     # Choose model class based on --standalone flag
     if args.standalone:
         print("Using standalone model (transformers-free)...")
-        from qwen_tts import Qwen3TTSModelStandalone as ModelClass
+        from qwen3_tts_standalone import Qwen3TTSModel as ModelClass
     else:
         from qwen_tts import Qwen3TTSModel as ModelClass
 

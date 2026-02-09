@@ -19,11 +19,11 @@ from qwen_tts.core.models.modeling_qwen3_tts import (
 )
 
 # Standalone models
-from qwen_tts.core.models.modeling_qwen3_tts_standalone import (
+from qwen3_tts_standalone.layers import (
     Qwen3TTSTalkerAttentionStandalone,
     Qwen3TTSTalkerDecoderLayerStandalone,
 )
-from qwen_tts.core.models.standalone import DynamicCache as StandaloneDynamicCache
+from qwen3_tts_standalone.utils import DynamicCache as StandaloneDynamicCache
 
 
 def _create_talker_config():

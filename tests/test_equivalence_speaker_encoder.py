@@ -15,8 +15,8 @@ from qwen_tts.core.models.configuration_qwen3_tts import Qwen3TTSSpeakerEncoderC
 from qwen_tts.core.models.modeling_qwen3_tts import Qwen3TTSSpeakerEncoder
 
 # Standalone models
-from qwen_tts.core.models.configuration_qwen3_tts_standalone import Qwen3TTSSpeakerEncoderConfigStandalone
-from qwen_tts.core.models.modeling_qwen3_tts_standalone import Qwen3TTSSpeakerEncoderStandalone
+from qwen3_tts_standalone.configuration import Qwen3TTSSpeakerEncoderConfigStandalone
+from qwen3_tts_standalone.speaker_encoder import Qwen3TTSSpeakerEncoderStandalone
 
 
 class TestSpeakerEncoderEquivalence:

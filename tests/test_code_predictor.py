@@ -14,13 +14,9 @@ These tests verify that:
 import pytest
 import torch
 
-from qwen_tts.core.models.code_predictor_standalone import (
-    CodePredictor,
-    CodePredictorOutput,
-)
-from qwen_tts.core.models.configuration_qwen3_tts_standalone import (
-    Qwen3TTSTalkerCodePredictorConfigStandalone,
-)
+from qwen3_tts_standalone import CodePredictor
+from qwen3_tts_standalone.code_predictor import CodePredictorOutput
+from qwen3_tts_standalone import Qwen3TTSTalkerCodePredictorConfigStandalone
 
 
 @pytest.fixture
@@ -159,32 +155,6 @@ class TestCodePredictor:
         
         assert torch.equal(output1.sequences, output2.sequences)
 
-
-@pytest.mark.skip(reason="Old standalone implementation removed; equivalence verified via E2E tests")
-class TestCodePredictorEquivalence:
-    """Tests that verify equivalence with the original implementation.
-    
-    Note: These tests are skipped because the old standalone implementation
-    (Qwen3TTSTalkerCodePredictorModelStandaloneForConditionalGenerationStandalone)
-    has been removed as part of the code cleanup. Equivalence is now verified
-    through E2E tests that compare against the transformers-based implementation.
-    """
-
-    def test_weight_loading_from_original(self, small_config):
-        """Test that weights can be loaded from the original model."""
-        pass
-
-    def test_greedy_output_equivalence(self, small_config):
-        """Test that greedy outputs match the original implementation."""
-        pass
-
-    def test_sampling_output_equivalence(self, small_config):
-        """Test that sampled outputs match the original implementation with same seed."""
-        pass
-
-    def test_equivalence_with_same_hidden_size(self, same_hidden_size_config):
-        """Test equivalence when hidden sizes match (Identity projection case)."""
-        pass
 
 
 class TestCodePredictorEdgeCases:

@@ -4,7 +4,7 @@
 """
 Talker base transformer model for Qwen3-TTS.
 
-This module contains the base transformer decoder (Qwen3TTSTalkerModelStandalone)
+This module contains the base transformer decoder (TalkerModel)
 used by the Talker for generating audio codec tokens.
 """
 
@@ -14,14 +14,14 @@ from typing import Optional
 import torch
 from torch import nn
 
-from .base_model_standalone import StandalonePreTrainedModel
-from .configuration_qwen3_tts_standalone import Qwen3TTSTalkerConfigStandalone
-from .layers_standalone import (
-    Qwen3TTSRMSNormStandalone,
-    Qwen3TTSTalkerDecoderLayerStandalone,
-    Qwen3TTSTalkerRotaryEmbeddingStandalone,
+from .base_model import BaseModel
+from .configuration import TalkerConfig
+from .layers import (
+    RMSNorm,
+    TalkerDecoderLayer,
+    TalkerRotaryEmbedding,
 )
-from .standalone import (
+from .utils import (
     BaseModelOutputWithPast,
     DynamicCache,
     can_return_tuple,
@@ -32,7 +32,7 @@ from .standalone import (
 logger = logging.getLogger(__name__)
 
 
-class Qwen3TTSTalkerTextPreTrainedModelStandalone(StandalonePreTrainedModel):
+class TalkerPreTrainedModel(BaseModel):
     """Base class for Talker text models."""
     
     base_model_prefix = "model"
@@ -57,18 +57,18 @@ class Qwen3TTSTalkerTextPreTrainedModelStandalone(StandalonePreTrainedModel):
             module.weight.data.normal_(mean=0.0, std=std)
             if module.padding_idx is not None:
                 module.weight.data[module.padding_idx].zero_()
-        elif isinstance(module, Qwen3TTSRMSNormStandalone):
+        elif isinstance(module, RMSNorm):
             module.weight.data.fill_(1.0)
 
 
-class Qwen3TTSTalkerModelStandalone(Qwen3TTSTalkerTextPreTrainedModelStandalone):
+class TalkerModel(TalkerPreTrainedModel):
     """Transformer decoder model for generating audio codec tokens.
     
     This is the base model that generates the first codebook tokens.
     It uses multimodal RoPE for positional encoding.
     """
     
-    config_class = Qwen3TTSTalkerConfigStandalone
+    config_class = TalkerConfig
     base_model_prefix = "talker.model"
 
     def __init__(self, config):
@@ -76,11 +76,11 @@ class Qwen3TTSTalkerModelStandalone(Qwen3TTSTalkerTextPreTrainedModelStandalone)
         self.padding_idx = config.pad_token_id
         self.vocab_size = config.vocab_size
         self.layers = nn.ModuleList([
-            Qwen3TTSTalkerDecoderLayerStandalone(config, layer_idx)
+            TalkerDecoderLayer(config, layer_idx)
             for layer_idx in range(config.num_hidden_layers)
         ])
-        self.norm = Qwen3TTSRMSNormStandalone(config.hidden_size, eps=config.rms_norm_eps)
-        self.rotary_emb = Qwen3TTSTalkerRotaryEmbeddingStandalone(config)
+        self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.rotary_emb = TalkerRotaryEmbedding(config)
         self.gradient_checkpointing = False
         self.codec_embedding = nn.Embedding(config.vocab_size, config.hidden_size)
         self.text_embedding = nn.Embedding(config.text_vocab_size, config.text_hidden_size)
@@ -191,7 +191,15 @@ class Qwen3TTSTalkerModelStandalone(Qwen3TTSTalkerTextPreTrainedModelStandalone)
         )
 
 
+# Backward compatibility aliases
+Qwen3TTSTalkerTextPreTrainedModelStandalone = TalkerPreTrainedModel
+Qwen3TTSTalkerModelStandalone = TalkerModel
+
+
 __all__ = [
+    "TalkerPreTrainedModel",
+    "TalkerModel",
+    # Backward compatibility
     "Qwen3TTSTalkerTextPreTrainedModelStandalone",
     "Qwen3TTSTalkerModelStandalone",
 ]

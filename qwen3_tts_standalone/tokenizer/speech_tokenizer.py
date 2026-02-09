@@ -22,13 +22,11 @@ import soundfile as sf
 import torch
 from torch.nn.utils.rnn import pad_sequence
 
-from ..core.tokenizer_12hz.configuration_qwen3_tts_tokenizer_v2_standalone import (
-    Qwen3TTSTokenizerV2ConfigStandalone,
-)
-from ..core.tokenizer_12hz.modeling_qwen3_tts_tokenizer_v2_standalone import (
-    Qwen3TTSTokenizerV2ModelStandalone,
-    Qwen3TTSTokenizerV2EncoderOutputStandalone,
-    Qwen3TTSTokenizerV2DecoderOutputStandalone,
+from .config import SpeechTokenizerConfig
+from .model import (
+    SpeechTokenizerModel,
+    SpeechTokenizerEncoderOutput,
+    SpeechTokenizerDecoderOutput,
 )
 
 
@@ -40,7 +38,7 @@ AudioInput = Union[
 ]
 
 
-class Qwen3TTSTokenizerStandalone:
+class SpeechTokenizer:
     """
     Standalone wrapper for Qwen3 TTS 12Hz Tokenizer.
 
@@ -73,7 +71,7 @@ class Qwen3TTSTokenizerStandalone:
         device: Optional[Union[str, torch.device]] = None,
         dtype: Optional[torch.dtype] = None,
         **kwargs,
-    ) -> "Qwen3TTSTokenizerStandalone":
+    ) -> "Qwen3TTSSpeechTokenizer":
         """
         Load tokenizer from pretrained weights.
 
@@ -86,13 +84,28 @@ class Qwen3TTSTokenizerStandalone:
         Returns:
             Initialized tokenizer instance
         """
-        from transformers import AutoFeatureExtractor, AutoConfig, AutoModel
-        from ..core.tokenizer_12hz.configuration_qwen3_tts_tokenizer_v2 import (
-            Qwen3TTSTokenizerV2Config,
-        )
-        from ..core.tokenizer_12hz.modeling_qwen3_tts_tokenizer_v2 import (
-            Qwen3TTSTokenizerV2Model,
-        )
+        try:
+            from transformers import AutoFeatureExtractor, AutoConfig, AutoModel
+        except ImportError:
+            raise ImportError(
+                "The speech tokenizer encoder requires the 'transformers' library. "
+                "Install it with: pip install transformers"
+            )
+        
+        # Import the encoder model from the original qwen_tts package
+        # This is required for encoding audio to codes
+        try:
+            from qwen_tts.core.tokenizer_12hz.configuration_qwen3_tts_tokenizer_v2 import (
+                Qwen3TTSTokenizerV2Config,
+            )
+            from qwen_tts.core.tokenizer_12hz.modeling_qwen3_tts_tokenizer_v2 import (
+                Qwen3TTSTokenizerV2Model,
+            )
+        except ImportError:
+            raise ImportError(
+                "Could not import encoder model from qwen_tts. "
+                "The speech tokenizer encoder is not yet fully standalone."
+            )
         
         inst = cls()
         
@@ -117,10 +130,10 @@ class Qwen3TTSTokenizerStandalone:
         inst.encoder_model = inst.encoder_model.to(device).to(inst.dtype)
         
         # Load config and create standalone decoder
-        inst.config = Qwen3TTSTokenizerV2ConfigStandalone.from_pretrained(pretrained_model_name_or_path)
+        inst.config = SpeechTokenizerConfig.from_pretrained(pretrained_model_name_or_path)
         
         # Create standalone decoder model and load weights
-        inst.decoder_model = Qwen3TTSTokenizerV2ModelStandalone(inst.config)
+        inst.decoder_model = SpeechTokenizerModel(inst.config)
         
         # Copy decoder weights from original model
         decoder_state_dict = original_model.decoder.state_dict()
@@ -206,7 +219,7 @@ class Qwen3TTSTokenizerStandalone:
         audios: AudioInput,
         sr: Optional[int] = None,
         return_dict: bool = True,
-    ) -> Union[Qwen3TTSTokenizerV2EncoderOutputStandalone, Tuple]:
+    ) -> Union[SpeechTokenizerEncoderOutput, Tuple]:
         """
         Encode audio to discrete codes.
 
@@ -243,7 +256,7 @@ class Qwen3TTSTokenizerStandalone:
         if not return_dict:
             return (audio_codes,)
 
-        return Qwen3TTSTokenizerV2EncoderOutputStandalone(audio_codes=audio_codes)
+        return SpeechTokenizerEncoderOutput(audio_codes=audio_codes)
 
     def decode(
         self,
@@ -315,4 +328,12 @@ class Qwen3TTSTokenizerStandalone:
         return int(self.config.decode_upsample_rate)
 
 
-__all__ = ["Qwen3TTSTokenizerStandalone"]
+# Backward compatibility alias
+Qwen3TTSSpeechTokenizer = SpeechTokenizer
+
+
+__all__ = [
+    "SpeechTokenizer",
+    # Backward compatibility
+    "Qwen3TTSSpeechTokenizer",
+]

@@ -245,7 +245,8 @@ class TestE2EModelLoading:
     
     def test_standalone_model_import(self):
         """Test that standalone model classes can be imported."""
-        from qwen_tts import Qwen3TTSModelStandalone, VoiceClonePromptItemStandalone
+        from qwen3_tts_standalone import Qwen3TTSModel as Qwen3TTSModelStandalone
+        from qwen3_tts_standalone.inference import VoiceClonePromptItemStandalone
         
         assert Qwen3TTSModelStandalone is not None
         assert VoiceClonePromptItemStandalone is not None
@@ -259,7 +260,7 @@ class TestE2EModelLoading:
     
     def test_standalone_config_import(self):
         """Test that standalone config classes can be imported."""
-        from qwen_tts.core.models.configuration_qwen3_tts_standalone import (
+        from qwen3_tts_standalone.configuration import (
             Qwen3TTSConfigStandalone,
             Qwen3TTSTalkerConfigStandalone,
             Qwen3TTSSpeakerEncoderConfigStandalone,

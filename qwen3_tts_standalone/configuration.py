@@ -365,7 +365,7 @@ class BaseConfig:
         return self.to_dict() == other.to_dict()
 
 
-class Qwen3TTSSpeakerEncoderConfigStandalone(BaseConfig):
+class SpeakerEncoderConfig(BaseConfig):
     r"""
     Configuration class for Qwen3TTS Speaker Encoder (ECAPA-TDNN based).
     
@@ -420,9 +420,9 @@ class Qwen3TTSSpeakerEncoderConfigStandalone(BaseConfig):
         self.sample_rate = sample_rate
 
 
-class Qwen3TTSTalkerCodePredictorConfigStandalone(BaseConfig):
+class CodePredictorConfig(BaseConfig):
     r"""
-    Configuration class for the Qwen3TTS Talker Code Predictor model.
+    Configuration class for the Code Predictor model.
     
     This transformer-based model predicts audio codec codes from hidden representations.
     
@@ -548,14 +548,14 @@ class Qwen3TTSTalkerCodePredictorConfigStandalone(BaseConfig):
         layer_type_validation(self.layer_types)
 
 
-class Qwen3TTSTalkerConfigStandalone(BaseConfig):
+class TalkerConfig(BaseConfig):
     r"""
     Configuration class for the Qwen3TTS Talker model.
     
     This is the main TTS decoder model that generates audio codec codes from text.
     
     Args:
-        code_predictor_config (`dict` or `Qwen3TTSTalkerCodePredictorConfigStandalone`, *optional*):
+        code_predictor_config (`dict` or `CodePredictorConfig`, *optional*):
             Configuration for the code predictor sub-model.
         vocab_size (`int`, *optional*, defaults to 3072):
             Vocabulary size of the talker model.
@@ -624,7 +624,7 @@ class Qwen3TTSTalkerConfigStandalone(BaseConfig):
     
     def __init__(
         self,
-        code_predictor_config: Optional[Union[Dict[str, Any], Qwen3TTSTalkerCodePredictorConfigStandalone]] = None,
+        code_predictor_config: Optional[Union[Dict[str, Any], CodePredictorConfig]] = None,
         vocab_size: int = 3072,
         hidden_size: int = 1024,
         intermediate_size: int = 2048,
@@ -698,15 +698,15 @@ class Qwen3TTSTalkerConfigStandalone(BaseConfig):
         
         # Handle code_predictor_config
         if code_predictor_config is None:
-            self.code_predictor_config = Qwen3TTSTalkerCodePredictorConfigStandalone()
+            self.code_predictor_config = CodePredictorConfig()
             logger.info("code_predictor_config is None. Initializing with default values.")
-        elif isinstance(code_predictor_config, Qwen3TTSTalkerCodePredictorConfigStandalone):
+        elif isinstance(code_predictor_config, CodePredictorConfig):
             self.code_predictor_config = code_predictor_config
         else:
-            self.code_predictor_config = Qwen3TTSTalkerCodePredictorConfigStandalone(**code_predictor_config)
+            self.code_predictor_config = CodePredictorConfig(**code_predictor_config)
 
 
-class Qwen3TTSConfigStandalone(BaseConfig):
+class TTSConfig(BaseConfig):
     """
     Main configuration class for Qwen3TTS model.
     
@@ -714,9 +714,9 @@ class Qwen3TTSConfigStandalone(BaseConfig):
     for the complete TTS system.
     
     Args:
-        talker_config (`dict` or `Qwen3TTSTalkerConfigStandalone`, *optional*):
+        talker_config (`dict` or `TalkerConfig`, *optional*):
             Configuration for the talker model.
-        speaker_encoder_config (`dict` or `Qwen3TTSSpeakerEncoderConfigStandalone`, *optional*):
+        speaker_encoder_config (`dict` or `SpeakerEncoderConfig`, *optional*):
             Configuration for the speaker encoder.
         tokenizer_type (`str`, *optional*):
             Type of tokenizer to use.
@@ -740,8 +740,8 @@ class Qwen3TTSConfigStandalone(BaseConfig):
     
     def __init__(
         self,
-        talker_config: Optional[Union[Dict[str, Any], Qwen3TTSTalkerConfigStandalone]] = None,
-        speaker_encoder_config: Optional[Union[Dict[str, Any], Qwen3TTSSpeakerEncoderConfigStandalone]] = None,
+        talker_config: Optional[Union[Dict[str, Any], TalkerConfig]] = None,
+        speaker_encoder_config: Optional[Union[Dict[str, Any], SpeakerEncoderConfig]] = None,
         tokenizer_type: Optional[str] = None,
         tts_model_size: Optional[str] = None,
         tts_model_type: Optional[str] = None,
@@ -756,21 +756,21 @@ class Qwen3TTSConfigStandalone(BaseConfig):
         
         # Handle talker_config
         if talker_config is None:
-            self.talker_config = Qwen3TTSTalkerConfigStandalone()
+            self.talker_config = TalkerConfig()
             logger.info("talker_config is None. Initializing with default values.")
-        elif isinstance(talker_config, Qwen3TTSTalkerConfigStandalone):
+        elif isinstance(talker_config, TalkerConfig):
             self.talker_config = talker_config
         else:
-            self.talker_config = Qwen3TTSTalkerConfigStandalone(**talker_config)
+            self.talker_config = TalkerConfig(**talker_config)
         
         # Handle speaker_encoder_config
         if speaker_encoder_config is None:
-            self.speaker_encoder_config = Qwen3TTSSpeakerEncoderConfigStandalone()
+            self.speaker_encoder_config = SpeakerEncoderConfig()
             logger.info("speaker_encoder_config is None. Initializing with default values.")
-        elif isinstance(speaker_encoder_config, Qwen3TTSSpeakerEncoderConfigStandalone):
+        elif isinstance(speaker_encoder_config, SpeakerEncoderConfig):
             self.speaker_encoder_config = speaker_encoder_config
         else:
-            self.speaker_encoder_config = Qwen3TTSSpeakerEncoderConfigStandalone(**speaker_encoder_config)
+            self.speaker_encoder_config = SpeakerEncoderConfig(**speaker_encoder_config)
         
         self.tokenizer_type = tokenizer_type
         self.tts_model_size = tts_model_size
@@ -788,7 +788,7 @@ class Qwen3TTSConfigStandalone(BaseConfig):
 
 def convert_speaker_encoder_config(
     old_config: "Qwen3TTSSpeakerEncoderConfig"  # noqa: F821
-) -> Qwen3TTSSpeakerEncoderConfigStandalone:
+) -> SpeakerEncoderConfig:
     """
     Convert a transformers-based Qwen3TTSSpeakerEncoderConfig to standalone version.
     
@@ -798,7 +798,7 @@ def convert_speaker_encoder_config(
     Returns:
         Standalone configuration instance.
     """
-    return Qwen3TTSSpeakerEncoderConfigStandalone(
+    return SpeakerEncoderConfig(
         mel_dim=old_config.mel_dim,
         enc_dim=old_config.enc_dim,
         enc_channels=old_config.enc_channels,
@@ -813,7 +813,7 @@ def convert_speaker_encoder_config(
 
 def convert_code_predictor_config(
     old_config: "Qwen3TTSTalkerCodePredictorConfig"  # noqa: F821
-) -> Qwen3TTSTalkerCodePredictorConfigStandalone:
+) -> CodePredictorConfig:
     """
     Convert a transformers-based Qwen3TTSTalkerCodePredictorConfig to standalone version.
     
@@ -823,7 +823,7 @@ def convert_code_predictor_config(
     Returns:
         Standalone configuration instance.
     """
-    return Qwen3TTSTalkerCodePredictorConfigStandalone(
+    return CodePredictorConfig(
         vocab_size=old_config.vocab_size,
         hidden_size=old_config.hidden_size,
         intermediate_size=old_config.intermediate_size,
@@ -851,7 +851,7 @@ def convert_code_predictor_config(
 
 def convert_talker_config(
     old_config: "Qwen3TTSTalkerConfig"  # noqa: F821
-) -> Qwen3TTSTalkerConfigStandalone:
+) -> TalkerConfig:
     """
     Convert a transformers-based Qwen3TTSTalkerConfig to standalone version.
     
@@ -866,7 +866,7 @@ def convert_talker_config(
     if hasattr(old_config, "code_predictor_config") and old_config.code_predictor_config is not None:
         code_predictor_config = convert_code_predictor_config(old_config.code_predictor_config)
     
-    return Qwen3TTSTalkerConfigStandalone(
+    return TalkerConfig(
         code_predictor_config=code_predictor_config,
         vocab_size=old_config.vocab_size,
         hidden_size=old_config.hidden_size,
@@ -903,7 +903,7 @@ def convert_talker_config(
 
 def convert_tts_config(
     old_config: "Qwen3TTSConfig"  # noqa: F821
-) -> Qwen3TTSConfigStandalone:
+) -> TTSConfig:
     """
     Convert a transformers-based Qwen3TTSConfig to standalone version.
     
@@ -922,7 +922,7 @@ def convert_tts_config(
     if hasattr(old_config, "speaker_encoder_config") and old_config.speaker_encoder_config is not None:
         speaker_encoder_config = convert_speaker_encoder_config(old_config.speaker_encoder_config)
     
-    return Qwen3TTSConfigStandalone(
+    return TTSConfig(
         talker_config=talker_config,
         speaker_encoder_config=speaker_encoder_config,
         tokenizer_type=old_config.tokenizer_type,
@@ -936,10 +936,22 @@ def convert_tts_config(
     )
 
 
+# Backward compatibility aliases
+Qwen3TTSConfigStandalone = TTSConfig
+Qwen3TTSTalkerConfigStandalone = TalkerConfig
+Qwen3TTSSpeakerEncoderConfigStandalone = SpeakerEncoderConfig
+Qwen3TTSTalkerCodePredictorConfigStandalone = CodePredictorConfig
+
+
 __all__ = [
     # Base class
     "BaseConfig",
-    # Configuration classes
+    # Configuration classes (new names)
+    "TTSConfig",
+    "TalkerConfig",
+    "SpeakerEncoderConfig",
+    "CodePredictorConfig",
+    # Backward compatibility aliases
     "Qwen3TTSConfigStandalone",
     "Qwen3TTSTalkerConfigStandalone",
     "Qwen3TTSSpeakerEncoderConfigStandalone",
@@ -947,6 +959,8 @@ __all__ = [
     # Validation functions
     "layer_type_validation",
     "rope_config_validation",
+    "VALID_ROPE_TYPES",
+    "VALID_LAYER_TYPES",
     # Conversion functions
     "convert_tts_config",
     "convert_talker_config",

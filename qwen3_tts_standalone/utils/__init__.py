@@ -16,7 +16,6 @@ from .attention import (
     sdpa_attention_forward,
 )
 from .cache import Cache, DynamicCache
-from .generation import GenerateOutput, GenerationMixin
 from .masking import create_causal_mask, create_sliding_window_causal_mask
 from .outputs import BaseModelOutputWithPast, CausalLMOutputWithPast, ModelOutput
 from .rope import (
@@ -28,6 +27,8 @@ from .rope import (
 )
 from .sample import sample_top_k_top_p
 from .utils import cached_file, can_return_tuple
+from .download import download_weights_from_hf
+from .generation import GenerateOutput, GenerationMixin
 
 __all__ = [
     # Activations
@@ -43,9 +44,6 @@ __all__ = [
     # Cache
     "Cache",
     "DynamicCache",
-    # Generation
-    "GenerateOutput",
-    "GenerationMixin",
     # Masking
     "create_causal_mask",
     "create_sliding_window_causal_mask",
@@ -64,4 +62,8 @@ __all__ = [
     # Utils
     "can_return_tuple",
     "cached_file",
+    "download_weights_from_hf",
+    # Generation
+    "GenerateOutput",
+    "GenerationMixin",
 ]

@@ -49,21 +49,6 @@ from .configuration_qwen3_tts_tokenizer_v2 import (
 logger = logging.get_logger(__name__)
 
 
-def _default_rope_init_fn(config, device=None):
-    """
-    Default RoPE initialization function for standard rotary embeddings.
-    """
-    base = config.rope_theta
-    dim = config.head_dim
-    inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32, device=device) / dim))
-    attention_scaling = 1.0
-    return inv_freq, attention_scaling
-
-
-# Extend ROPE_INIT_FUNCTIONS with our default implementation
-ROPE_INIT_FUNCTIONS_EXTENDED = {**ROPE_INIT_FUNCTIONS, "default": _default_rope_init_fn}
-
-
 @dataclass
 @auto_docstring
 class Qwen3TTSTokenizerV2EncoderOutput(ModelOutput):
@@ -272,7 +257,7 @@ class Qwen3TTSTokenizerV2DecoderRotatoryEmbedding(nn.Module):
         self.original_max_seq_len = config.max_position_embeddings
 
         self.config = config
-        self.rope_init_fn = ROPE_INIT_FUNCTIONS_EXTENDED[self.rope_type]
+        self.rope_init_fn = ROPE_INIT_FUNCTIONS[self.rope_type]
 
         inv_freq, self.attention_scaling = self.rope_init_fn(self.config, device)
         self.register_buffer("inv_freq", inv_freq, persistent=False)

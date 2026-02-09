@@ -39,14 +39,12 @@ from typing import Any, Dict, List, Optional, Type, TypeVar, Union
 import torch
 from huggingface_hub import hf_hub_download, snapshot_download
 from torch import nn
-from transformers import GenerationConfig
-
-from .configuration_qwen3_tts_standalone import BaseConfig
+from .configuration import BaseConfig
 
 logger = logging.getLogger(__name__)
 
 # Type variable for model classes
-M = TypeVar("M", bound="StandalonePreTrainedModel")
+M = TypeVar("M", bound="BaseModel")
 
 
 def _load_safetensors_file(filepath: str, device: str = "cpu") -> Dict[str, torch.Tensor]:
@@ -148,7 +146,7 @@ def _apply_device_map(model: nn.Module, device_map: Dict[str, torch.device]) -> 
             module.to(device)
 
 
-class StandaloneGenerationMixin:
+class GenerationMixin:
     """
     Mixin class that provides generation capabilities for standalone models.
     
@@ -196,7 +194,7 @@ class StandaloneGenerationMixin:
         return True
 
 
-class StandalonePreTrainedModel(nn.Module, StandaloneGenerationMixin):
+class BaseModel(nn.Module, GenerationMixin):
     """
     Base class for standalone pretrained models.
     
@@ -243,8 +241,8 @@ class StandalonePreTrainedModel(nn.Module, StandaloneGenerationMixin):
         self._device = torch.device("cpu")
         self.gradient_checkpointing = False
         
-        # Initialize generation config for GenerationMixin compatibility
-        self.generation_config = GenerationConfig()
+        # Generation config (empty dict, kept for compatibility)
+        self.generation_config = {}
     
     @property
     def device(self) -> torch.device:
@@ -524,8 +522,16 @@ class StandalonePreTrainedModel(nn.Module, StandaloneGenerationMixin):
         return f"{self.__class__.__name__}(config={self.config.model_type})"
 
 
+# Backward compatibility aliases
+StandalonePreTrainedModel = BaseModel
+StandaloneGenerationMixin = GenerationMixin
+
+
 __all__ = [
+    "BaseModel",
+    "GenerationMixin",
+    "BaseConfig",
+    # Backward compatibility
     "StandalonePreTrainedModel",
     "StandaloneGenerationMixin",
-    "BaseConfig",
 ]

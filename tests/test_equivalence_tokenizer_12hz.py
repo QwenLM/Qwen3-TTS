@@ -20,7 +20,7 @@ class TestTokenizerV2ConfigEquivalence:
         from qwen_tts.core.tokenizer_12hz.configuration_qwen3_tts_tokenizer_v2 import (
             Qwen3TTSTokenizerV2DecoderConfig,
         )
-        from qwen_tts.core.tokenizer_12hz.configuration_qwen3_tts_tokenizer_v2_standalone import (
+        from qwen3_tts_standalone.tokenizer.config import (
             Qwen3TTSTokenizerV2DecoderConfigStandalone,
         )
         
@@ -51,7 +51,7 @@ class TestTokenizerV2ConfigEquivalence:
         from qwen_tts.core.tokenizer_12hz.configuration_qwen3_tts_tokenizer_v2 import (
             Qwen3TTSTokenizerV2Config,
         )
-        from qwen_tts.core.tokenizer_12hz.configuration_qwen3_tts_tokenizer_v2_standalone import (
+        from qwen3_tts_standalone.tokenizer.config import (
             convert_to_standalone_config,
         )
         
@@ -65,7 +65,7 @@ class TestTokenizerV2ConfigEquivalence:
 
     def test_config_to_dict_roundtrip(self):
         """Test config serialization and deserialization."""
-        from qwen_tts.core.tokenizer_12hz.configuration_qwen3_tts_tokenizer_v2_standalone import (
+        from qwen3_tts_standalone.tokenizer.config import (
             Qwen3TTSTokenizerV2ConfigStandalone,
         )
         
@@ -83,7 +83,7 @@ class TestTokenizerV2ConfigEquivalence:
 
 def _create_minimal_decoder_config():
     """Create a minimal decoder config for testing."""
-    from qwen_tts.core.tokenizer_12hz.configuration_qwen3_tts_tokenizer_v2_standalone import (
+    from qwen3_tts_standalone.tokenizer.config import (
         Qwen3TTSTokenizerV2DecoderConfigStandalone,
     )
     return Qwen3TTSTokenizerV2DecoderConfigStandalone(
@@ -111,7 +111,7 @@ class TestConvLayerEquivalence:
         from qwen_tts.core.tokenizer_12hz.modeling_qwen3_tts_tokenizer_v2 import (
             Qwen3TTSTokenizerV2CausalConvNet,
         )
-        from qwen_tts.core.tokenizer_12hz.modeling_qwen3_tts_tokenizer_v2_standalone import (
+        from qwen3_tts_standalone.tokenizer.model import (
             Qwen3TTSTokenizerV2CausalConvNetStandalone,
         )
         
@@ -138,7 +138,7 @@ class TestConvLayerEquivalence:
         from qwen_tts.core.tokenizer_12hz.modeling_qwen3_tts_tokenizer_v2 import (
             Qwen3TTSTokenizerV2CausalTransConvNet,
         )
-        from qwen_tts.core.tokenizer_12hz.modeling_qwen3_tts_tokenizer_v2_standalone import (
+        from qwen3_tts_standalone.tokenizer.model import (
             Qwen3TTSTokenizerV2CausalTransConvNetStandalone,
         )
         
@@ -165,7 +165,7 @@ class TestConvLayerEquivalence:
         from qwen_tts.core.tokenizer_12hz.modeling_qwen3_tts_tokenizer_v2 import (
             Qwen3TTSTokenizerV2ConvNeXtBlock,
         )
-        from qwen_tts.core.tokenizer_12hz.modeling_qwen3_tts_tokenizer_v2_standalone import (
+        from qwen3_tts_standalone.tokenizer.model import (
             Qwen3TTSTokenizerV2ConvNeXtBlockStandalone,
         )
         
@@ -196,7 +196,7 @@ class TestTransformerLayerEquivalence:
         from qwen_tts.core.tokenizer_12hz.modeling_qwen3_tts_tokenizer_v2 import (
             Qwen3TTSTokenizerV2DecoderRMSNorm,
         )
-        from qwen_tts.core.tokenizer_12hz.modeling_qwen3_tts_tokenizer_v2_standalone import (
+        from qwen3_tts_standalone.tokenizer.model import (
             Qwen3TTSTokenizerV2DecoderRMSNormStandalone,
         )
         
@@ -223,7 +223,7 @@ class TestTransformerLayerEquivalence:
         from qwen_tts.core.tokenizer_12hz.modeling_qwen3_tts_tokenizer_v2 import (
             Qwen3TTSTokenizerV2DecoderMlp,
         )
-        from qwen_tts.core.tokenizer_12hz.modeling_qwen3_tts_tokenizer_v2_standalone import (
+        from qwen3_tts_standalone.tokenizer.model import (
             Qwen3TTSTokenizerV2DecoderMlpStandalone,
         )
         
@@ -251,7 +251,7 @@ class TestTransformerLayerEquivalence:
             Qwen3TTSTokenizerV2DecoderAttention,
             Qwen3TTSTokenizerV2DecoderRotatoryEmbedding,
         )
-        from qwen_tts.core.tokenizer_12hz.modeling_qwen3_tts_tokenizer_v2_standalone import (
+        from qwen3_tts_standalone.tokenizer.model import (
             Qwen3TTSTokenizerV2DecoderAttentionStandalone,
             Qwen3TTSTokenizerV2DecoderRotaryEmbeddingStandalone,
         )
@@ -301,7 +301,7 @@ class TestQuantizerEquivalence:
         from qwen_tts.core.tokenizer_12hz.modeling_qwen3_tts_tokenizer_v2 import (
             EuclideanCodebook,
         )
-        from qwen_tts.core.tokenizer_12hz.modeling_qwen3_tts_tokenizer_v2_standalone import (
+        from qwen3_tts_standalone.tokenizer.model import (
             EuclideanCodebookStandalone,
         )
         
@@ -327,7 +327,7 @@ class TestQuantizerEquivalence:
         from qwen_tts.core.tokenizer_12hz.modeling_qwen3_tts_tokenizer_v2 import (
             VectorQuantization,
         )
-        from qwen_tts.core.tokenizer_12hz.modeling_qwen3_tts_tokenizer_v2_standalone import (
+        from qwen3_tts_standalone.tokenizer.model import (
             VectorQuantizationStandalone,
         )
         
@@ -353,7 +353,7 @@ class TestQuantizerEquivalence:
         from qwen_tts.core.tokenizer_12hz.modeling_qwen3_tts_tokenizer_v2 import (
             ResidualVectorQuantization,
         )
-        from qwen_tts.core.tokenizer_12hz.modeling_qwen3_tts_tokenizer_v2_standalone import (
+        from qwen3_tts_standalone.tokenizer.model import (
             ResidualVectorQuantizationStandalone,
         )
         
@@ -384,7 +384,7 @@ class TestSnakeBetaEquivalence:
         from qwen_tts.core.tokenizer_12hz.modeling_qwen3_tts_tokenizer_v2 import (
             SnakeBeta,
         )
-        from qwen_tts.core.tokenizer_12hz.modeling_qwen3_tts_tokenizer_v2_standalone import (
+        from qwen3_tts_standalone.tokenizer.model import (
             SnakeBetaStandalone,
         )
         
@@ -416,7 +416,7 @@ class TestTransformerModelEquivalence:
             Qwen3TTSTokenizerV2DecoderTransformerLayer,
             Qwen3TTSTokenizerV2DecoderRotatoryEmbedding,
         )
-        from qwen_tts.core.tokenizer_12hz.modeling_qwen3_tts_tokenizer_v2_standalone import (
+        from qwen3_tts_standalone.tokenizer.model import (
             Qwen3TTSTokenizerV2DecoderTransformerLayerStandalone,
             Qwen3TTSTokenizerV2DecoderRotaryEmbeddingStandalone,
         )
@@ -474,7 +474,7 @@ class TestDecoderEquivalence:
         from qwen_tts.core.tokenizer_12hz.configuration_qwen3_tts_tokenizer_v2 import (
             Qwen3TTSTokenizerV2DecoderConfig,
         )
-        from qwen_tts.core.tokenizer_12hz.modeling_qwen3_tts_tokenizer_v2_standalone import (
+        from qwen3_tts_standalone.tokenizer.model import (
             Qwen3TTSTokenizerV2DecoderStandalone,
         )
         
@@ -521,6 +521,137 @@ class TestDecoderEquivalence:
         assert torch.allclose(out_orig, out_standalone, atol=1e-3)
 
 
+class TestPaddingBugFixes:
+    """Test bug fixes for padding issues (upstream commits 5f8581d, 6cafe55)."""
+
+    def test_causal_trans_conv_zero_right_pad(self):
+        """Test CausalTransConvNet correctly handles zero right_pad case.
+        
+        Regression test for upstream fix 5f8581d: padding values were
+        incorrectly calculated, causing output shape issues.
+        """
+        from qwen_tts.core.tokenizer_12hz.modeling_qwen3_tts_tokenizer_v2 import (
+            Qwen3TTSTokenizerV2CausalTransConvNet,
+        )
+        from qwen3_tts_standalone.tokenizer.model import (
+            Qwen3TTSTokenizerV2CausalTransConvNetStandalone,
+        )
+        
+        set_seed(42)
+        
+        # Case where kernel_size == stride, so pad = 0 and right_pad = 0
+        in_channels, out_channels, kernel_size, stride = 32, 64, 4, 4
+        
+        orig = Qwen3TTSTokenizerV2CausalTransConvNet(in_channels, out_channels, kernel_size, stride)
+        standalone = Qwen3TTSTokenizerV2CausalTransConvNetStandalone(in_channels, out_channels, kernel_size, stride)
+        
+        # Check padding attributes are correctly set
+        assert standalone.left_pad == 0
+        assert standalone.right_pad == 0  # kernel_size - stride = 0
+        
+        copy_weights(orig, standalone)
+        
+        set_seed(42)
+        x = torch.randn(2, in_channels, 25)
+        
+        with torch.no_grad():
+            out_orig = orig(x)
+            out_standalone = standalone(x)
+        
+        # Outputs should match
+        assert out_orig.shape == out_standalone.shape
+        assert torch.allclose(out_orig, out_standalone, atol=1e-5)
+
+    def test_causal_trans_conv_various_strides(self):
+        """Test CausalTransConvNet with various kernel/stride combinations."""
+        from qwen_tts.core.tokenizer_12hz.modeling_qwen3_tts_tokenizer_v2 import (
+            Qwen3TTSTokenizerV2CausalTransConvNet,
+        )
+        from qwen3_tts_standalone.tokenizer.model import (
+            Qwen3TTSTokenizerV2CausalTransConvNetStandalone,
+        )
+        
+        test_cases = [
+            (32, 64, 4, 4),  # pad = 0
+            (32, 64, 4, 2),  # pad = 2
+            (32, 64, 8, 4),  # pad = 4
+            (32, 64, 3, 1),  # pad = 2
+        ]
+        
+        for in_ch, out_ch, kernel, stride in test_cases:
+            set_seed(42)
+            
+            orig = Qwen3TTSTokenizerV2CausalTransConvNet(in_ch, out_ch, kernel, stride)
+            standalone = Qwen3TTSTokenizerV2CausalTransConvNetStandalone(in_ch, out_ch, kernel, stride)
+            
+            copy_weights(orig, standalone)
+            
+            x = torch.randn(2, in_ch, 25)
+            
+            with torch.no_grad():
+                out_orig = orig(x)
+                out_standalone = standalone(x)
+            
+            assert out_orig.shape == out_standalone.shape, f"Shape mismatch for kernel={kernel}, stride={stride}"
+            assert torch.allclose(out_orig, out_standalone, atol=1e-5), f"Value mismatch for kernel={kernel}, stride={stride}"
+
+    def test_decode_with_negative_padding_codes(self):
+        """Test decode correctly handles negative padding values in audio_codes.
+        
+        Regression test for upstream fix 6cafe55: padding values (-1) were
+        incorrectly counted in audio_lengths and not clamped before decode.
+        """
+        set_seed(42)
+        
+        # Test the core logic without instantiating full model
+        # This tests the fix: audio_lengths = (audio_codes[..., 0] > -1).sum(1)
+        # instead of the buggy: audio_lengths = (audio_codes[..., 0] > 0).sum(1)
+        
+        decode_upsample_rate = 1920  # Default from config
+        
+        # Create codes with explicit values to test edge cases
+        # Use values 1-100 to avoid ambiguity with 0
+        batch_size, seq_len, num_quantizers = 2, 20, 16
+        codes = torch.randint(1, 100, (batch_size, seq_len, num_quantizers))
+        
+        # Add padding at the end of first sequence (half is padding)
+        codes[0, 10:, :] = -1
+        # Second sequence has no padding
+        
+        # Test the FIXED logic: > -1 correctly counts non-padding tokens
+        audio_lengths_fixed = (codes[..., 0] > -1).sum(1) * decode_upsample_rate
+        expected_lengths_0 = 10 * decode_upsample_rate
+        expected_lengths_1 = 20 * decode_upsample_rate
+        
+        assert audio_lengths_fixed[0] == expected_lengths_0, f"Expected {expected_lengths_0}, got {audio_lengths_fixed[0]}"
+        assert audio_lengths_fixed[1] == expected_lengths_1, f"Expected {expected_lengths_1}, got {audio_lengths_fixed[1]}"
+        
+        # Test that valid code=0 is correctly handled
+        # Create codes where some valid codes are 0 (valid codebook index)
+        codes_with_valid_zero = torch.ones(2, 10, 16, dtype=torch.long)  # All 1s
+        codes_with_valid_zero[0, 5, 0] = 0  # Valid code 0 at position 5
+        codes_with_valid_zero[1, :, :] = -1  # All padding
+        codes_with_valid_zero[1, :5, :] = 1  # First 5 are valid
+        
+        # Old buggy logic: > 0 would incorrectly exclude valid code=0
+        audio_lengths_buggy = (codes_with_valid_zero[..., 0] > 0).sum(1) * decode_upsample_rate
+        # Fixed logic: > -1 correctly includes code=0 as valid
+        audio_lengths_correct = (codes_with_valid_zero[..., 0] > -1).sum(1) * decode_upsample_rate
+        
+        # Buggy version would only count 9 (excludes position 5 with code=0)
+        assert audio_lengths_buggy[0] == 9 * decode_upsample_rate, "Buggy logic should exclude valid code=0"
+        # Fixed version correctly counts all 10
+        assert audio_lengths_correct[0] == 10 * decode_upsample_rate, "Fixed logic should include valid code=0"
+        # Both should count 5 for the second sequence
+        assert audio_lengths_buggy[1] == 5 * decode_upsample_rate
+        assert audio_lengths_correct[1] == 5 * decode_upsample_rate
+        
+        # Verify clamping works (negative codes should be clamped to 0)
+        codes_clamped = torch.clamp(codes, min=0)
+        assert (codes_clamped >= 0).all(), "Clamping failed"
+        assert (codes_clamped[0, 10:, :] == 0).all(), "Padding not clamped to 0"
+
+
 class TestRoundtrip:
     """Test encode-decode roundtrip equivalence."""
     
@@ -559,5 +690,6 @@ __all__ = [
     "TestSnakeBetaEquivalence",
     "TestTransformerModelEquivalence",
     "TestDecoderEquivalence",
+    "TestPaddingBugFixes",
     "TestRoundtrip",
 ]

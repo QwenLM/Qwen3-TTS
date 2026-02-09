@@ -52,28 +52,6 @@ from .configuration_qwen3_tts import (Qwen3TTSConfig,
 logger = logging.get_logger(__name__)
 
 
-def _default_rope_init_fn(config, device=None):
-    """
-    Default RoPE initialization function for standard rotary embeddings.
-    
-    This is used when rope_scaling is None or rope_type is "default".
-    """
-    base = config.rope_theta
-    dim = config.head_dim
-    
-    # Compute inverse frequencies
-    inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32, device=device) / dim))
-    
-    # No attention scaling for default RoPE
-    attention_scaling = 1.0
-    
-    return inv_freq, attention_scaling
-
-
-# Extend ROPE_INIT_FUNCTIONS with our default implementation
-ROPE_INIT_FUNCTIONS_EXTENDED = {**ROPE_INIT_FUNCTIONS, "default": _default_rope_init_fn}
-
-
 def download_weights_from_hf_specific(
     model_name_or_path: str,
     cache_dir: str | None,
@@ -557,7 +535,7 @@ class Qwen3TTSTalkerRotaryEmbedding(nn.Module):
         self.original_max_seq_len = config.max_position_embeddings
 
         self.config = config
-        self.rope_init_fn = ROPE_INIT_FUNCTIONS_EXTENDED[self.rope_type]
+        self.rope_init_fn = ROPE_INIT_FUNCTIONS[self.rope_type]
 
         inv_freq, self.attention_scaling = self.rope_init_fn(self.config, device)
         self.register_buffer("inv_freq", inv_freq, persistent=False)
@@ -592,7 +570,7 @@ class Qwen3TTSRotaryEmbedding(nn.Module):
         self.original_max_seq_len = config.max_position_embeddings
 
         self.config = config
-        self.rope_init_fn = ROPE_INIT_FUNCTIONS_EXTENDED[self.rope_type]
+        self.rope_init_fn = ROPE_INIT_FUNCTIONS[self.rope_type]
 
         inv_freq, self.attention_scaling = self.rope_init_fn(self.config, device)
         self.register_buffer("inv_freq", inv_freq, persistent=False)
@@ -1447,8 +1425,6 @@ class Qwen3TTSTalkerDecoderLayer(GradientCheckpointingLayer):
 
 
 class Qwen3TTSTalkerModel(Qwen3TTSTalkerTextPreTrainedModel):
-    # this is the model that generates the higher codebook from the codebook 0
-    # it is a transformer decoder model
     config_class = Qwen3TTSTalkerConfig
     base_model_prefix = "talker.model"
 
@@ -1691,7 +1667,6 @@ class Qwen3TTSTalkerForConditionalGeneration(Qwen3TTSTalkerTextPreTrainedModel, 
             codec_ids = None
         # Generate
         else:
-            # this is where the higher codebook are predicted
             last_id_hidden = self.get_input_embeddings()(input_ids)
             predictor_result = self.code_predictor.generate(
                 inputs_embeds=torch.cat((past_hidden, last_id_hidden), dim=1),

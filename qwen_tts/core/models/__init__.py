@@ -16,23 +16,3 @@
 from .configuration_qwen3_tts import Qwen3TTSConfig
 from .modeling_qwen3_tts import Qwen3TTSForConditionalGeneration
 from .processing_qwen3_tts import Qwen3TTSProcessor
-
-# Standalone versions (transformer-independent)
-from .configuration_qwen3_tts_standalone import (
-    Qwen3TTSConfigStandalone,
-    Qwen3TTSTalkerConfigStandalone,
-    Qwen3TTSSpeakerEncoderConfigStandalone,
-    Qwen3TTSTalkerCodePredictorConfigStandalone,
-)
-from .modeling_qwen3_tts_standalone import (
-    Qwen3TTSForConditionalGenerationStandalone,
-    Qwen3TTSTalkerForConditionalGenerationStandalone,
-    Qwen3TTSPreTrainedModelStandalone,
-    Qwen3TTSTalkerModelStandalone,
-)
-from .processing_qwen3_tts_standalone import Qwen3TTSProcessorStandalone
-
-# Simplified standalone implementations (recommended)
-from .code_predictor_standalone import CodePredictor
-from .talker_standalone import Talker
-from .tts_standalone import TTS

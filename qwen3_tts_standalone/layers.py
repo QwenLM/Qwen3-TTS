@@ -17,11 +17,11 @@ from typing import Callable, Optional
 import torch
 from torch import nn
 
-from .configuration_qwen3_tts_standalone import (
-    Qwen3TTSConfigStandalone,
-    Qwen3TTSTalkerConfigStandalone,
+from .configuration import (
+    TTSConfig,
+    TalkerConfig,
 )
-from .standalone import (
+from .utils import (
     ACT2FN,
     ALL_ATTENTION_FUNCTIONS,
     Cache,
@@ -37,7 +37,7 @@ from .standalone import (
 ROPE_INIT_FUNCTIONS_EXTENDED = {**ROPE_INIT_FUNCTIONS, "default": ROPE_INIT_FUNCTIONS["default"]}
 
 
-class Qwen3TTSRMSNormStandalone(nn.Module):
+class RMSNorm(nn.Module):
     """RMSNorm (Root Mean Square Layer Normalization)."""
     
     def __init__(self, hidden_size, eps=1e-6):
@@ -56,10 +56,10 @@ class Qwen3TTSRMSNormStandalone(nn.Module):
         return f"{tuple(self.weight.shape)}, eps={self.variance_epsilon}"
 
 
-class Qwen3TTSRotaryEmbeddingStandalone(nn.Module):
+class RotaryEmbedding(nn.Module):
     """Rotary Position Embedding for the CodePredictor."""
     
-    def __init__(self, config: Qwen3TTSConfigStandalone, device=None):
+    def __init__(self, config: TTSConfig, device=None):
         super().__init__()
         if hasattr(config, "rope_scaling") and config.rope_scaling is not None:
             self.rope_type = config.rope_scaling.get("rope_type", config.rope_scaling.get("type"))
@@ -87,10 +87,10 @@ class Qwen3TTSRotaryEmbeddingStandalone(nn.Module):
         return cos.to(dtype=x.dtype), sin.to(dtype=x.dtype)
 
 
-class Qwen3TTSTalkerRotaryEmbeddingStandalone(nn.Module):
+class TalkerRotaryEmbedding(nn.Module):
     """Multimodal Rotary Position Embedding for the Talker."""
     
-    def __init__(self, config: Qwen3TTSTalkerConfigStandalone, device=None):
+    def __init__(self, config: TalkerConfig, device=None):
         super().__init__()
         if hasattr(config, "rope_scaling") and config.rope_scaling is not None:
             self.rope_type = config.rope_scaling.get("rope_type", config.rope_scaling.get("type"))
@@ -176,10 +176,10 @@ def eager_attention_forward(module, query, key, value, attention_mask, scaling, 
     return attn_output, attn_weights
 
 
-class Qwen3TTSAttentionStandalone(nn.Module):
+class Attention(nn.Module):
     """Multi-headed attention for CodePredictor."""
 
-    def __init__(self, config: Qwen3TTSConfigStandalone, layer_idx: int):
+    def __init__(self, config: TTSConfig, layer_idx: int):
         super().__init__()
         self.config = config
         self.layer_idx = layer_idx
@@ -192,8 +192,8 @@ class Qwen3TTSAttentionStandalone(nn.Module):
         self.k_proj = nn.Linear(config.hidden_size, config.num_key_value_heads * self.head_dim, bias=config.attention_bias)
         self.v_proj = nn.Linear(config.hidden_size, config.num_key_value_heads * self.head_dim, bias=config.attention_bias)
         self.o_proj = nn.Linear(config.num_attention_heads * self.head_dim, config.hidden_size, bias=config.attention_bias)
-        self.q_norm = Qwen3TTSRMSNormStandalone(self.head_dim, eps=config.rms_norm_eps)
-        self.k_norm = Qwen3TTSRMSNormStandalone(self.head_dim, eps=config.rms_norm_eps)
+        self.q_norm = RMSNorm(self.head_dim, eps=config.rms_norm_eps)
+        self.k_norm = RMSNorm(self.head_dim, eps=config.rms_norm_eps)
         self.sliding_window = config.sliding_window if config.layer_types[layer_idx] == "sliding_attention" else None
 
     def forward(self, hidden_states, position_embeddings, attention_mask, past_key_values=None, cache_position=None, **kwargs):
@@ -216,7 +216,7 @@ class Qwen3TTSAttentionStandalone(nn.Module):
         return self.o_proj(attn_output), attn_weights
 
 
-class Qwen3TTSTalkerAttentionStandalone(nn.Module):
+class TalkerAttention(nn.Module):
     """Multi-headed attention with multimodal RoPE for Talker."""
 
     def __init__(self, config, layer_idx):
@@ -232,8 +232,8 @@ class Qwen3TTSTalkerAttentionStandalone(nn.Module):
         self.k_proj = nn.Linear(config.hidden_size, config.num_key_value_heads * self.head_dim, bias=config.attention_bias)
         self.v_proj = nn.Linear(config.hidden_size, config.num_key_value_heads * self.head_dim, bias=config.attention_bias)
         self.o_proj = nn.Linear(config.num_attention_heads * self.head_dim, config.hidden_size, bias=config.attention_bias)
-        self.q_norm = Qwen3TTSRMSNormStandalone(self.head_dim, eps=config.rms_norm_eps)
-        self.k_norm = Qwen3TTSRMSNormStandalone(self.head_dim, eps=config.rms_norm_eps)
+        self.q_norm = RMSNorm(self.head_dim, eps=config.rms_norm_eps)
+        self.k_norm = RMSNorm(self.head_dim, eps=config.rms_norm_eps)
         self.sliding_window = getattr(config, "sliding_window", None)
         self.rope_scaling = config.rope_scaling
 
@@ -258,7 +258,7 @@ class Qwen3TTSTalkerAttentionStandalone(nn.Module):
         return self.o_proj(attn_output), attn_weights
 
 
-class Qwen3TTSTalkerTextMLPStandalone(nn.Module):
+class TalkerMLP(nn.Module):
     """SwiGLU MLP for the Talker/CodePredictor."""
     
     def __init__(self, config, intermediate_size=None):
@@ -275,7 +275,7 @@ class Qwen3TTSTalkerTextMLPStandalone(nn.Module):
         return self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))
 
 
-class Qwen3TTSTalkerResizeMLPStandalone(nn.Module):
+class ResizeMLP(nn.Module):
     """MLP for resizing text embeddings to match codec embeddings."""
     
     def __init__(self, input_size: int, intermediate_size: int, output_size: int, act: str, bias=False):
@@ -288,16 +288,16 @@ class Qwen3TTSTalkerResizeMLPStandalone(nn.Module):
         return self.linear_fc2(self.act_fn(self.linear_fc1(hidden_state)))
 
 
-class Qwen3TTSDecoderLayerStandalone(nn.Module):
+class DecoderLayer(nn.Module):
     """Transformer decoder layer for CodePredictor."""
     
-    def __init__(self, config: Qwen3TTSConfigStandalone, layer_idx: int):
+    def __init__(self, config: TTSConfig, layer_idx: int):
         super().__init__()
         self.hidden_size = config.hidden_size
-        self.self_attn = Qwen3TTSAttentionStandalone(config=config, layer_idx=layer_idx)
-        self.mlp = Qwen3TTSTalkerTextMLPStandalone(config)
-        self.input_layernorm = Qwen3TTSRMSNormStandalone(config.hidden_size, eps=config.rms_norm_eps)
-        self.post_attention_layernorm = Qwen3TTSRMSNormStandalone(config.hidden_size, eps=config.rms_norm_eps)
+        self.self_attn = Attention(config=config, layer_idx=layer_idx)
+        self.mlp = TalkerMLP(config)
+        self.input_layernorm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.post_attention_layernorm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.attention_type = config.layer_types[layer_idx]
 
     def forward(self, hidden_states, attention_mask=None, position_ids=None, past_key_values=None, output_attentions=False, use_cache=False, cache_position=None, position_embeddings=None, **kwargs):
@@ -315,16 +315,16 @@ class Qwen3TTSDecoderLayerStandalone(nn.Module):
         return outputs
 
 
-class Qwen3TTSTalkerDecoderLayerStandalone(nn.Module):
+class TalkerDecoderLayer(nn.Module):
     """Transformer decoder layer for Talker."""
     
     def __init__(self, config, layer_idx):
         super().__init__()
         self.hidden_size = config.hidden_size
-        self.self_attn = Qwen3TTSTalkerAttentionStandalone(config, layer_idx)
-        self.mlp = Qwen3TTSTalkerTextMLPStandalone(config, intermediate_size=config.intermediate_size)
-        self.input_layernorm = Qwen3TTSRMSNormStandalone(config.hidden_size, eps=config.rms_norm_eps)
-        self.post_attention_layernorm = Qwen3TTSRMSNormStandalone(config.hidden_size, eps=config.rms_norm_eps)
+        self.self_attn = TalkerAttention(config, layer_idx)
+        self.mlp = TalkerMLP(config, intermediate_size=config.intermediate_size)
+        self.input_layernorm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.post_attention_layernorm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
     def forward(self, hidden_states, attention_mask=None, position_ids=None, past_key_values=None, output_attentions=False, use_cache=False, cache_position=None, position_embeddings=None, **kwargs):
         residual = hidden_states
@@ -341,10 +341,33 @@ class Qwen3TTSTalkerDecoderLayerStandalone(nn.Module):
         return outputs
 
 
+# Backward compatibility aliases
+Qwen3TTSRMSNormStandalone = RMSNorm
+Qwen3TTSRotaryEmbeddingStandalone = RotaryEmbedding
+Qwen3TTSTalkerRotaryEmbeddingStandalone = TalkerRotaryEmbedding
+Qwen3TTSAttentionStandalone = Attention
+Qwen3TTSTalkerAttentionStandalone = TalkerAttention
+Qwen3TTSTalkerTextMLPStandalone = TalkerMLP
+Qwen3TTSTalkerResizeMLPStandalone = ResizeMLP
+Qwen3TTSDecoderLayerStandalone = DecoderLayer
+Qwen3TTSTalkerDecoderLayerStandalone = TalkerDecoderLayer
+
+
 __all__ = [
-    "Qwen3TTSRMSNormStandalone", "Qwen3TTSRotaryEmbeddingStandalone", "Qwen3TTSTalkerRotaryEmbeddingStandalone",
+    # New names
+    "RMSNorm", "RotaryEmbedding", "TalkerRotaryEmbedding",
     "rotate_half", "apply_rotary_pos_emb", "apply_multimodal_rotary_pos_emb", "eager_attention_forward",
-    "Qwen3TTSAttentionStandalone", "Qwen3TTSTalkerAttentionStandalone", "Qwen3TTSTalkerTextMLPStandalone",
-    "Qwen3TTSTalkerResizeMLPStandalone", "Qwen3TTSDecoderLayerStandalone", "Qwen3TTSTalkerDecoderLayerStandalone",
+    "Attention", "TalkerAttention", "TalkerMLP",
+    "ResizeMLP", "DecoderLayer", "TalkerDecoderLayer",
     "ROPE_INIT_FUNCTIONS_EXTENDED",
+    # Backward compatibility aliases
+    "Qwen3TTSRMSNormStandalone",
+    "Qwen3TTSRotaryEmbeddingStandalone",
+    "Qwen3TTSTalkerRotaryEmbeddingStandalone",
+    "Qwen3TTSAttentionStandalone",
+    "Qwen3TTSTalkerAttentionStandalone",
+    "Qwen3TTSTalkerTextMLPStandalone",
+    "Qwen3TTSTalkerResizeMLPStandalone",
+    "Qwen3TTSDecoderLayerStandalone",
+    "Qwen3TTSTalkerDecoderLayerStandalone",
 ]

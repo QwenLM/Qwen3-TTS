@@ -18,7 +18,7 @@ from qwen_tts.core.models.modeling_qwen3_tts import (
 )
 
 # Standalone models
-from qwen_tts.core.models.modeling_qwen3_tts_standalone import (
+from qwen3_tts_standalone.layers import (
     Qwen3TTSRMSNormStandalone,
     Qwen3TTSRotaryEmbeddingStandalone,
     Qwen3TTSTalkerTextMLPStandalone,

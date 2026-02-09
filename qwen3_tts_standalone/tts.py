@@ -15,19 +15,18 @@ from typing import Optional
 import torch
 import torch.nn as nn
 
-from .configuration_qwen3_tts_standalone import Qwen3TTSConfigStandalone
-from .speaker_encoder_standalone import (
-    Qwen3TTSSpeakerEncoderStandalone,
+from .configuration import TTSConfig
+from .speaker_encoder import (
+    SpeakerEncoder,
     mel_spectrogram,
 )
-from .standalone import cached_file
-from .base_model_standalone import StandalonePreTrainedModel
-from .utils import download_weights_from_hf_specific
-from ...inference.qwen3_tts_tokenizer_standalone import Qwen3TTSTokenizerStandalone
-from .talker_standalone import Talker
+from .utils import cached_file, download_weights_from_hf
+from .base_model import BaseModel
+from .tokenizer import SpeechTokenizer
+from .talker import Talker
 
 
-class TTS(StandalonePreTrainedModel):
+class TTS(BaseModel):
     """
     Main TTS model that orchestrates text-to-speech generation.
     
@@ -40,9 +39,9 @@ class TTS(StandalonePreTrainedModel):
     This is a simplified version that makes the generation flow explicit.
     """
     
-    config_class = Qwen3TTSConfigStandalone
+    config_class = TTSConfig
     
-    def __init__(self, config: Qwen3TTSConfigStandalone):
+    def __init__(self, config: TTSConfig):
         super().__init__(config)
         self.config = config
         
@@ -51,7 +50,7 @@ class TTS(StandalonePreTrainedModel):
         
         # Speaker encoder (only for base model)
         if config.tts_model_type == "base":
-            self.speaker_encoder = Qwen3TTSSpeakerEncoderStandalone(
+            self.speaker_encoder = SpeakerEncoder(
                 config.speaker_encoder_config
             )
         else:
@@ -175,7 +174,7 @@ class TTS(StandalonePreTrainedModel):
         
         # Download speech tokenizer if loading from Hub
         if not local_files_only and not os.path.isdir(pretrained_model_name_or_path):
-            download_weights_from_hf_specific(
+            download_weights_from_hf(
                 pretrained_model_name_or_path,
                 cache_dir=cache_dir,
                 allow_patterns=["speech_tokenizer/*"],
@@ -198,7 +197,7 @@ class TTS(StandalonePreTrainedModel):
             )
         
         speech_tokenizer_dir = os.path.dirname(speech_tokenizer_path)
-        speech_tokenizer = Qwen3TTSTokenizerStandalone.from_pretrained(speech_tokenizer_dir)
+        speech_tokenizer = SpeechTokenizer.from_pretrained(speech_tokenizer_dir)
         model.load_speech_tokenizer(speech_tokenizer)
 
         # Load generation config

@@ -20,7 +20,7 @@ class TestCache:
 
     def test_dynamic_cache_initialization(self):
         """Test DynamicCache initializes correctly."""
-        from qwen_tts.core.models.standalone import DynamicCache
+        from qwen3_tts_standalone.utils import DynamicCache
         
         cache = DynamicCache()
         assert len(cache) == 0
@@ -28,7 +28,7 @@ class TestCache:
 
     def test_dynamic_cache_update_single_layer(self):
         """Test updating cache for a single layer."""
-        from qwen_tts.core.models.standalone import DynamicCache
+        from qwen3_tts_standalone.utils import DynamicCache
         
         cache = DynamicCache()
         
@@ -46,7 +46,7 @@ class TestCache:
 
     def test_dynamic_cache_incremental_update(self):
         """Test incremental updates to cache."""
-        from qwen_tts.core.models.standalone import DynamicCache
+        from qwen3_tts_standalone.utils import DynamicCache
         
         cache = DynamicCache()
         
@@ -72,7 +72,7 @@ class TestCache:
 
     def test_dynamic_cache_multiple_layers(self):
         """Test cache with multiple layers."""
-        from qwen_tts.core.models.standalone import DynamicCache
+        from qwen3_tts_standalone.utils import DynamicCache
         
         cache = DynamicCache()
         
@@ -92,7 +92,7 @@ class TestCache:
 
     def test_dynamic_cache_reset(self):
         """Test cache reset functionality."""
-        from qwen_tts.core.models.standalone import DynamicCache
+        from qwen3_tts_standalone.utils import DynamicCache
         
         cache = DynamicCache()
         
@@ -113,7 +113,7 @@ class TestActivations:
 
     def test_act2fn_silu(self):
         """Test SiLU activation lookup."""
-        from qwen_tts.core.models.standalone import ACT2FN
+        from qwen3_tts_standalone.utils import ACT2FN
         
         activation = ACT2FN["silu"]
         x = torch.randn(2, 10)
@@ -124,7 +124,7 @@ class TestActivations:
 
     def test_act2fn_gelu(self):
         """Test GELU activation lookup."""
-        from qwen_tts.core.models.standalone import ACT2FN
+        from qwen3_tts_standalone.utils import ACT2FN
         
         activation = ACT2FN["gelu"]
         x = torch.randn(2, 10)
@@ -135,14 +135,14 @@ class TestActivations:
 
     def test_act2fn_invalid_key(self):
         """Test that invalid activation name raises KeyError."""
-        from qwen_tts.core.models.standalone import ACT2FN
+        from qwen3_tts_standalone.utils import ACT2FN
         
         with pytest.raises(KeyError):
             _ = ACT2FN["invalid_activation"]
 
     def test_gelu_new_activation(self):
         """Test NewGELUActivation (tanh approximation)."""
-        from qwen_tts.core.models.standalone import NewGELUActivation
+        from qwen3_tts_standalone.utils import NewGELUActivation
         
         activation = NewGELUActivation()
         x = torch.tensor([0.0, 1.0, -1.0, 2.0])
@@ -158,7 +158,7 @@ class TestRepeatKV:
 
     def test_repeat_kv_no_repeat(self):
         """Test repeat_kv with n_rep=1 (no repeat needed)."""
-        from qwen_tts.core.models.standalone import repeat_kv
+        from qwen3_tts_standalone.utils import repeat_kv
         
         x = torch.randn(2, 4, 10, 64)
         output = repeat_kv(x, n_rep=1)
@@ -167,7 +167,7 @@ class TestRepeatKV:
 
     def test_repeat_kv_double(self):
         """Test repeat_kv with n_rep=2."""
-        from qwen_tts.core.models.standalone import repeat_kv
+        from qwen3_tts_standalone.utils import repeat_kv
         
         x = torch.randn(2, 4, 10, 64)  # 4 kv heads
         output = repeat_kv(x, n_rep=2)  # expand to 8 heads
@@ -185,7 +185,7 @@ class TestModelOutputs:
 
     def test_base_model_output_with_past(self):
         """Test BaseModelOutputWithPast dataclass."""
-        from qwen_tts.core.models.standalone import BaseModelOutputWithPast
+        from qwen3_tts_standalone.utils import BaseModelOutputWithPast
         
         hidden_states = torch.randn(2, 10, 256)
         output = BaseModelOutputWithPast(
@@ -201,7 +201,7 @@ class TestModelOutputs:
 
     def test_causal_lm_output_with_past(self):
         """Test CausalLMOutputWithPast dataclass."""
-        from qwen_tts.core.models.standalone import CausalLMOutputWithPast
+        from qwen3_tts_standalone.utils import CausalLMOutputWithPast
         
         logits = torch.randn(2, 10, 1000)
         output = CausalLMOutputWithPast(
@@ -218,7 +218,7 @@ class TestModelOutputs:
 
     def test_model_output_to_tuple(self):
         """Test ModelOutput to_tuple method filters None values."""
-        from qwen_tts.core.models.standalone import BaseModelOutputWithPast
+        from qwen3_tts_standalone.utils import BaseModelOutputWithPast
         
         hidden_states = torch.randn(2, 10, 256)
         output = BaseModelOutputWithPast(
@@ -239,7 +239,7 @@ class TestRoPE:
 
     def test_rope_init_functions_registry(self):
         """Test ROPE_INIT_FUNCTIONS contains expected types."""
-        from qwen_tts.core.models.standalone import ROPE_INIT_FUNCTIONS
+        from qwen3_tts_standalone.utils import ROPE_INIT_FUNCTIONS
         
         assert "default" in ROPE_INIT_FUNCTIONS
         assert "linear" in ROPE_INIT_FUNCTIONS
@@ -247,7 +247,7 @@ class TestRoPE:
 
     def test_compute_default_rope_parameters(self):
         """Test default RoPE parameter computation."""
-        from qwen_tts.core.models.standalone import ROPE_INIT_FUNCTIONS
+        from qwen3_tts_standalone.utils import ROPE_INIT_FUNCTIONS
         
         class MockConfig:
             rope_theta = 10000.0
@@ -267,7 +267,7 @@ class TestMasking:
 
     def test_create_causal_mask_sdpa_returns_none(self):
         """Test create_causal_mask returns None for SDPA when no attention mask."""
-        from qwen_tts.core.models.standalone import create_causal_mask
+        from qwen3_tts_standalone.utils import create_causal_mask
         
         class MockConfig:
             _attn_implementation = "sdpa"
@@ -287,7 +287,7 @@ class TestMasking:
 
     def test_create_causal_mask_eager(self):
         """Test create_causal_mask creates proper mask for eager attention."""
-        from qwen_tts.core.models.standalone import create_causal_mask
+        from qwen3_tts_standalone.utils import create_causal_mask
         
         class MockConfig:
             _attn_implementation = "eager"
@@ -321,14 +321,14 @@ class TestAttentionFunctions:
 
     def test_all_attention_functions_registry(self):
         """Test ALL_ATTENTION_FUNCTIONS contains expected implementations."""
-        from qwen_tts.core.models.standalone import ALL_ATTENTION_FUNCTIONS
+        from qwen3_tts_standalone.utils import ALL_ATTENTION_FUNCTIONS
         
         assert "sdpa" in ALL_ATTENTION_FUNCTIONS
         assert "flash_attention_2" in ALL_ATTENTION_FUNCTIONS
 
     def test_sdpa_attention_forward_basic(self):
         """Test SDPA attention forward pass."""
-        from qwen_tts.core.models.standalone import sdpa_attention_forward
+        from qwen3_tts_standalone.utils import sdpa_attention_forward
         
         class MockModule(nn.Module):
             is_causal = True
@@ -357,7 +357,7 @@ class TestGenerationMixin:
 
     def test_generate_output_dataclass(self):
         """Test GenerateOutput dataclass."""
-        from qwen_tts.core.models.standalone import GenerateOutput
+        from qwen3_tts_standalone.utils import GenerateOutput
         
         sequences = torch.randint(0, 1000, (2, 20))
         output = GenerateOutput(sequences=sequences)
@@ -368,7 +368,7 @@ class TestGenerationMixin:
 
     def test_generation_mixin_update_kwargs(self):
         """Test _update_model_kwargs_for_generation method."""
-        from qwen_tts.core.models.standalone import GenerationMixin, CausalLMOutputWithPast, DynamicCache
+        from qwen3_tts_standalone.utils import GenerationMixin, CausalLMOutputWithPast, DynamicCache
         
         class MockModel(GenerationMixin):
             pass
@@ -399,7 +399,7 @@ class TestCacheEquivalence:
 
     def test_dynamic_cache_equivalence(self):
         """Test standalone DynamicCache behaves like transformers DynamicCache."""
-        from qwen_tts.core.models.standalone import DynamicCache as StandaloneDynamicCache
+        from qwen3_tts_standalone.utils import DynamicCache as StandaloneDynamicCache
         from transformers.cache_utils import DynamicCache as TransformersDynamicCache
         
         set_seed(42)

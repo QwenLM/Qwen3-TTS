@@ -10,11 +10,12 @@ import torch
 
 from tests.conftest import set_seed
 
-from qwen_tts.core.models.configuration_qwen3_tts_standalone import (
+from qwen3_tts_standalone import (
     Qwen3TTSTalkerConfigStandalone,
     Qwen3TTSTalkerCodePredictorConfigStandalone,
+    Talker,
 )
-from qwen_tts.core.models.talker_standalone import Talker, TalkerOutput
+from qwen3_tts_standalone.talker import TalkerOutput
 
 
 @pytest.fixture

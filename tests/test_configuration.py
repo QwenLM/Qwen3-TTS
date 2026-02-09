@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 # Standalone configurations (transformers-free)
-from qwen_tts.core.models.configuration_qwen3_tts_standalone import (
+from qwen3_tts_standalone.configuration import (
     BaseConfig,
     Qwen3TTSConfigStandalone,
     Qwen3TTSTalkerConfigStandalone,
