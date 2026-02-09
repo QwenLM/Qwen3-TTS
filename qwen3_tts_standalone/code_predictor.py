@@ -24,16 +24,10 @@ from .utils import (
     create_causal_mask,
     sample_top_k_top_p,
 )
-from .configuration import (
-    Qwen3TTSTalkerCodePredictorConfigStandalone,
-)
+from .configuration import CodePredictorConfig
 
 # Import shared layer implementations
-from .layers import (
-    Qwen3TTSDecoderLayerStandalone,
-    Qwen3TTSRMSNormStandalone,
-    Qwen3TTSRotaryEmbeddingStandalone,
-)
+from .layers import DecoderLayer, RMSNorm, RotaryEmbedding
 
 
 @dataclass
@@ -59,7 +53,7 @@ class CodePredictor(nn.Module):
     
     def __init__(
         self, 
-        config: Qwen3TTSTalkerCodePredictorConfigStandalone, 
+        config: CodePredictorConfig, 
         embedding_dim: int,
     ):
         """
@@ -86,11 +80,11 @@ class CodePredictor(nn.Module):
         
         # Transformer decoder layers (reuse shared implementation)
         self.layers = nn.ModuleList([
-            Qwen3TTSDecoderLayerStandalone(config, layer_idx) 
+            DecoderLayer(config, layer_idx) 
             for layer_idx in range(config.num_hidden_layers)
         ])
-        self.norm = Qwen3TTSRMSNormStandalone(config.hidden_size, eps=config.rms_norm_eps)
-        self.rotary_emb = Qwen3TTSRotaryEmbeddingStandalone(config)
+        self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.rotary_emb = RotaryEmbedding(config)
         
         # Output heads: one per codebook we predict (codebooks 1 to N-1)
         # lm_head[i] predicts codebook (i+1) tokens

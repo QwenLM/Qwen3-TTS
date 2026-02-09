@@ -8,15 +8,24 @@ This module provides the speech tokenizer (audio codec) for encoding
 and decoding audio waveforms to/from discrete tokens.
 """
 
-from .speech_tokenizer import Qwen3TTSSpeechTokenizer
-from .config import (
-    Qwen3TTSTokenizerV2ConfigStandalone as Qwen3TTSSpeechTokenizerConfig,
-)
-from .model import (
-    Qwen3TTSTokenizerV2ModelStandalone as Qwen3TTSSpeechTokenizerModel,
-)
+from .speech_tokenizer import SpeechTokenizer
+from .config import SpeechTokenizerConfig, SpeechDecoderConfig, MimiEncoderConfig
+from .model import SpeechTokenizerModel
+
+# Backward compatibility aliases
+Qwen3TTSSpeechTokenizer = SpeechTokenizer
+Qwen3TTSSpeechTokenizerConfig = SpeechTokenizerConfig
+Qwen3TTSSpeechTokenizerModel = SpeechTokenizerModel
+
 
 __all__ = [
+    # New names
+    "SpeechTokenizer",
+    "SpeechTokenizerConfig",
+    "SpeechDecoderConfig",
+    "MimiEncoderConfig",
+    "SpeechTokenizerModel",
+    # Backward compatibility
     "Qwen3TTSSpeechTokenizer",
     "Qwen3TTSSpeechTokenizerConfig",
     "Qwen3TTSSpeechTokenizerModel",

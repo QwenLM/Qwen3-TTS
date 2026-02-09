@@ -11,7 +11,7 @@ Main components:
 - TTS: The main text-to-speech model
 - Talker: Generates audio codec tokens from text embeddings
 - CodePredictor: Predicts higher codebook layers
-- Qwen3TTSSpeechTokenizer: Encodes/decodes audio to/from discrete tokens
+- SpeechTokenizer: Encodes/decodes audio to/from discrete tokens
 
 Usage:
     from qwen3_tts_standalone import Qwen3TTSModel
@@ -24,54 +24,80 @@ Usage:
 from .tts import TTS
 from .talker import Talker
 from .code_predictor import CodePredictor
-from .speaker_encoder import Qwen3TTSSpeakerEncoderStandalone
+from .speaker_encoder import SpeakerEncoder
 
-# Configuration
+# Configuration (new names)
 from .configuration import (
-    Qwen3TTSConfigStandalone,
-    Qwen3TTSTalkerConfigStandalone,
-    Qwen3TTSTalkerCodePredictorConfigStandalone,
-    Qwen3TTSSpeakerEncoderConfigStandalone,
+    TTSConfig,
+    TalkerConfig,
+    CodePredictorConfig,
+    SpeakerEncoderConfig,
     BaseConfig,
 )
 
-# Tokenizer
+# Tokenizer (new names)
 from .tokenizer import (
-    Qwen3TTSSpeechTokenizer,
-    Qwen3TTSSpeechTokenizerConfig,
-    Qwen3TTSSpeechTokenizerModel,
+    SpeechTokenizer,
+    SpeechTokenizerConfig,
+    SpeechTokenizerModel,
 )
 
 # Processor
-from .processor import Qwen3TTSProcessor
+from .processor import Processor
 
 # High-level inference API
-from .inference import Qwen3TTSModelStandalone as Qwen3TTSModel
+from .inference import Qwen3TTSModel
 
 # Base model
-from .base_model import StandalonePreTrainedModel
+from .base_model import BaseModel
+
+# Backward compatibility aliases
+Qwen3TTSSpeakerEncoderStandalone = SpeakerEncoder
+Qwen3TTSConfigStandalone = TTSConfig
+Qwen3TTSTalkerConfigStandalone = TalkerConfig
+Qwen3TTSTalkerCodePredictorConfigStandalone = CodePredictorConfig
+Qwen3TTSSpeakerEncoderConfigStandalone = SpeakerEncoderConfig
+Qwen3TTSSpeechTokenizer = SpeechTokenizer
+Qwen3TTSSpeechTokenizerConfig = SpeechTokenizerConfig
+Qwen3TTSSpeechTokenizerModel = SpeechTokenizerModel
+Qwen3TTSProcessor = Processor
+Qwen3TTSModelStandalone = Qwen3TTSModel
+StandalonePreTrainedModel = BaseModel
+
 
 __all__ = [
-    # Models
+    # Models (new names)
     "TTS",
     "Talker",
     "CodePredictor",
+    "SpeakerEncoder",
+    # Configuration (new names)
+    "TTSConfig",
+    "TalkerConfig",
+    "CodePredictorConfig",
+    "SpeakerEncoderConfig",
+    "BaseConfig",
+    # Tokenizer (new names)
+    "SpeechTokenizer",
+    "SpeechTokenizerConfig",
+    "SpeechTokenizerModel",
+    # Processor
+    "Processor",
+    # Inference
+    "Qwen3TTSModel",
+    # Base
+    "BaseModel",
+    # Backward compatibility aliases
     "Qwen3TTSSpeakerEncoderStandalone",
-    # Configuration
     "Qwen3TTSConfigStandalone",
     "Qwen3TTSTalkerConfigStandalone",
     "Qwen3TTSTalkerCodePredictorConfigStandalone",
     "Qwen3TTSSpeakerEncoderConfigStandalone",
-    "BaseConfig",
-    # Tokenizer
     "Qwen3TTSSpeechTokenizer",
     "Qwen3TTSSpeechTokenizerConfig",
     "Qwen3TTSSpeechTokenizerModel",
-    # Processor
     "Qwen3TTSProcessor",
-    # Inference
-    "Qwen3TTSModel",
-    # Base
+    "Qwen3TTSModelStandalone",
     "StandalonePreTrainedModel",
 ]
 

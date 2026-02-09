@@ -13,7 +13,7 @@ from torch import nn
 from torch.nn import functional as F
 from librosa.filters import mel as librosa_mel_fn
 
-from .configuration import Qwen3TTSSpeakerEncoderConfigStandalone
+from .configuration import SpeakerEncoderConfig
 
 
 class TimeDelayNetBlock(nn.Module):
@@ -137,14 +137,14 @@ class SqueezeExcitationRes2NetBlock(nn.Module):
         return hidden_state + residual
 
 
-class Qwen3TTSSpeakerEncoderStandalone(torch.nn.Module):
+class SpeakerEncoder(torch.nn.Module):
     """ECAPA-TDNN speaker embedding model.
     
     Reference: "ECAPA-TDNN: Emphasized Channel Attention, Propagation and Aggregation in
     TDNN Based Speaker Verification" (https://huggingface.co/papers/2005.07143).
     """
 
-    def __init__(self, config: Qwen3TTSSpeakerEncoderConfigStandalone):
+    def __init__(self, config: SpeakerEncoderConfig):
         super().__init__()
         if len(config.enc_channels) != len(config.enc_kernel_sizes) or len(config.enc_channels) != len(config.enc_dilations):
             raise ValueError("enc_channels, enc_kernel_sizes and enc_dilations should have same length")
@@ -196,7 +196,13 @@ def mel_spectrogram(y, n_fft, num_mels, sampling_rate, hop_size, win_size, fmin,
     return dynamic_range_compression_torch(mel_spec)
 
 
+# Backward compatibility alias
+Qwen3TTSSpeakerEncoderStandalone = SpeakerEncoder
+
+
 __all__ = [
     "TimeDelayNetBlock", "Res2NetBlock", "SqueezeExcitationBlock", "AttentiveStatisticsPooling",
-    "SqueezeExcitationRes2NetBlock", "Qwen3TTSSpeakerEncoderStandalone", "mel_spectrogram", "dynamic_range_compression_torch",
+    "SqueezeExcitationRes2NetBlock", "SpeakerEncoder", "mel_spectrogram", "dynamic_range_compression_torch",
+    # Backward compatibility
+    "Qwen3TTSSpeakerEncoderStandalone",
 ]

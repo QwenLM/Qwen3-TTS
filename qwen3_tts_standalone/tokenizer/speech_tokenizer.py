@@ -22,11 +22,11 @@ import soundfile as sf
 import torch
 from torch.nn.utils.rnn import pad_sequence
 
-from .config import Qwen3TTSTokenizerV2ConfigStandalone as Qwen3TTSSpeechTokenizerConfig
+from .config import SpeechTokenizerConfig
 from .model import (
-    Qwen3TTSTokenizerV2ModelStandalone as Qwen3TTSSpeechTokenizerModel,
-    Qwen3TTSTokenizerV2EncoderOutputStandalone as SpeechTokenizerEncoderOutput,
-    Qwen3TTSTokenizerV2DecoderOutputStandalone as SpeechTokenizerDecoderOutput,
+    SpeechTokenizerModel,
+    SpeechTokenizerEncoderOutput,
+    SpeechTokenizerDecoderOutput,
 )
 
 
@@ -38,7 +38,7 @@ AudioInput = Union[
 ]
 
 
-class Qwen3TTSSpeechTokenizer:
+class SpeechTokenizer:
     """
     Standalone wrapper for Qwen3 TTS 12Hz Tokenizer.
 
@@ -130,10 +130,10 @@ class Qwen3TTSSpeechTokenizer:
         inst.encoder_model = inst.encoder_model.to(device).to(inst.dtype)
         
         # Load config and create standalone decoder
-        inst.config = Qwen3TTSSpeechTokenizerConfig.from_pretrained(pretrained_model_name_or_path)
+        inst.config = SpeechTokenizerConfig.from_pretrained(pretrained_model_name_or_path)
         
         # Create standalone decoder model and load weights
-        inst.decoder_model = Qwen3TTSSpeechTokenizerModel(inst.config)
+        inst.decoder_model = SpeechTokenizerModel(inst.config)
         
         # Copy decoder weights from original model
         decoder_state_dict = original_model.decoder.state_dict()
@@ -328,4 +328,12 @@ class Qwen3TTSSpeechTokenizer:
         return int(self.config.decode_upsample_rate)
 
 
-__all__ = ["Qwen3TTSSpeechTokenizer"]
+# Backward compatibility alias
+Qwen3TTSSpeechTokenizer = SpeechTokenizer
+
+
+__all__ = [
+    "SpeechTokenizer",
+    # Backward compatibility
+    "Qwen3TTSSpeechTokenizer",
+]

@@ -15,9 +15,9 @@ import torch
 import torch.nn as nn
 
 from .code_predictor import CodePredictor
-from .configuration import Qwen3TTSTalkerConfigStandalone
-from .transformer import Qwen3TTSTalkerModelStandalone
-from .layers import Qwen3TTSTalkerResizeMLPStandalone
+from .configuration import TalkerConfig
+from .transformer import TalkerModel
+from .layers import ResizeMLP
 from .utils import (
     DynamicCache,
     sample_top_k_top_p,
@@ -54,17 +54,17 @@ class Talker(nn.Module):
     rather than using GenerationMixin.
     """
     
-    def __init__(self, config: Qwen3TTSTalkerConfigStandalone):
+    def __init__(self, config: TalkerConfig):
         super().__init__()
         self.config = config
         self.vocab_size = config.vocab_size
         self.num_code_groups = config.num_code_groups
         
         # Core transformer model
-        self.model = Qwen3TTSTalkerModelStandalone(config)
+        self.model = TalkerModel(config)
         
         # Text projection: maps text hidden size to talker hidden size
-        self.text_projection = Qwen3TTSTalkerResizeMLPStandalone(
+        self.text_projection = ResizeMLP(
             config.text_hidden_size,
             config.text_hidden_size,
             config.hidden_size,

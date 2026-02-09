@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 
 @dataclass
-class Qwen3TTSTokenizerV2DecoderConfigStandalone:
+class SpeechDecoderConfig:
     """
     Configuration for the 12Hz tokenizer decoder.
     
@@ -62,7 +62,7 @@ class Qwen3TTSTokenizerV2DecoderConfigStandalone:
         return d
     
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "Qwen3TTSTokenizerV2DecoderConfigStandalone":
+    def from_dict(cls, d: Dict[str, Any]) -> "SpeechDecoderConfig":
         """Create config from dictionary."""
         # Convert lists back to tuples
         if "upsample_rates" in d and isinstance(d["upsample_rates"], list):
@@ -76,7 +76,7 @@ class Qwen3TTSTokenizerV2DecoderConfigStandalone:
 
 
 @dataclass
-class MimiEncoderConfigStandalone:
+class MimiEncoderConfig:
     """
     Minimal configuration for the Mimi encoder.
     
@@ -122,7 +122,7 @@ class MimiEncoderConfigStandalone:
         return d
     
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "MimiEncoderConfigStandalone":
+    def from_dict(cls, d: Dict[str, Any]) -> "MimiEncoderConfig":
         """Create config from dictionary."""
         if "upsampling_ratios" in d and isinstance(d["upsampling_ratios"], list):
             d["upsampling_ratios"] = tuple(d["upsampling_ratios"])
@@ -132,15 +132,15 @@ class MimiEncoderConfigStandalone:
 
 
 @dataclass
-class Qwen3TTSTokenizerV2ConfigStandalone:
+class SpeechTokenizerConfig:
     """
     Main configuration for the 12Hz tokenizer.
     
     This is a standalone replacement for the transformers-based config.
     """
     model_type: str = "qwen3_tts_tokenizer_12hz"
-    encoder_config: Optional[Union[Dict, MimiEncoderConfigStandalone]] = None
-    decoder_config: Optional[Union[Dict, Qwen3TTSTokenizerV2DecoderConfigStandalone]] = None
+    encoder_config: Optional[Union[Dict, MimiEncoderConfig]] = None
+    decoder_config: Optional[Union[Dict, SpeechDecoderConfig]] = None
     encoder_valid_num_quantizers: int = 16
     input_sample_rate: int = 24000
     output_sample_rate: int = 24000
@@ -153,12 +153,12 @@ class Qwen3TTSTokenizerV2ConfigStandalone:
         if self.encoder_config is None:
             self.encoder_config = MimiEncoderConfigStandalone()
         elif isinstance(self.encoder_config, dict):
-            self.encoder_config = MimiEncoderConfigStandalone.from_dict(self.encoder_config)
+            self.encoder_config = MimiEncoderConfig.from_dict(self.encoder_config)
         
         if self.decoder_config is None:
-            self.decoder_config = Qwen3TTSTokenizerV2DecoderConfigStandalone()
+            self.decoder_config = SpeechDecoderConfig()
         elif isinstance(self.decoder_config, dict):
-            self.decoder_config = Qwen3TTSTokenizerV2DecoderConfigStandalone.from_dict(self.decoder_config)
+            self.decoder_config = SpeechDecoderConfig.from_dict(self.decoder_config)
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert config to dictionary."""
@@ -175,7 +175,7 @@ class Qwen3TTSTokenizerV2ConfigStandalone:
         }
     
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "Qwen3TTSTokenizerV2ConfigStandalone":
+    def from_dict(cls, d: Dict[str, Any]) -> "SpeechTokenizerConfig":
         """Create config from dictionary."""
         encoder_config = d.get("encoder_config")
         decoder_config = d.get("decoder_config")
@@ -200,7 +200,7 @@ class Qwen3TTSTokenizerV2ConfigStandalone:
             json.dump(self.to_dict(), f, indent=2)
     
     @classmethod
-    def from_pretrained(cls, pretrained_model_name_or_path: str) -> "Qwen3TTSTokenizerV2ConfigStandalone":
+    def from_pretrained(cls, pretrained_model_name_or_path: str) -> "SpeechTokenizerConfig":
         """Load configuration from directory or HuggingFace Hub."""
         if os.path.isdir(pretrained_model_name_or_path):
             config_path = os.path.join(pretrained_model_name_or_path, "config.json")
@@ -220,7 +220,7 @@ class Qwen3TTSTokenizerV2ConfigStandalone:
 
 def convert_to_standalone_config(
     original_config,
-) -> Qwen3TTSTokenizerV2ConfigStandalone:
+) -> SpeechTokenizerConfig:
     """
     Convert original transformers-based config to standalone config.
     
@@ -228,7 +228,7 @@ def convert_to_standalone_config(
         original_config: A Qwen3TTSTokenizerV2Config instance
         
     Returns:
-        Qwen3TTSTokenizerV2ConfigStandalone
+        SpeechTokenizerConfig
     """
     # Extract encoder config
     encoder_dict = {}
@@ -277,7 +277,7 @@ def convert_to_standalone_config(
             "attention_dropout": getattr(dec, "attention_dropout", 0.0),
         }
     
-    return Qwen3TTSTokenizerV2ConfigStandalone(
+    return SpeechTokenizerConfig(
         model_type=getattr(original_config, "model_type", "qwen3_tts_tokenizer_12hz"),
         encoder_config=encoder_dict,
         decoder_config=decoder_dict,
@@ -289,9 +289,20 @@ def convert_to_standalone_config(
     )
 
 
+# Backward compatibility aliases
+Qwen3TTSTokenizerV2ConfigStandalone = SpeechTokenizerConfig
+Qwen3TTSTokenizerV2DecoderConfigStandalone = SpeechDecoderConfig
+MimiEncoderConfigStandalone = MimiEncoderConfig
+
+
 __all__ = [
+    # New names
+    "SpeechTokenizerConfig",
+    "SpeechDecoderConfig",
+    "MimiEncoderConfig",
+    "convert_to_standalone_config",
+    # Backward compatibility
     "Qwen3TTSTokenizerV2ConfigStandalone",
     "Qwen3TTSTokenizerV2DecoderConfigStandalone",
     "MimiEncoderConfigStandalone",
-    "convert_to_standalone_config",
 ]

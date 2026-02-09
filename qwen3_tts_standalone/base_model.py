@@ -44,7 +44,7 @@ from .configuration import BaseConfig
 logger = logging.getLogger(__name__)
 
 # Type variable for model classes
-M = TypeVar("M", bound="StandalonePreTrainedModel")
+M = TypeVar("M", bound="BaseModel")
 
 
 def _load_safetensors_file(filepath: str, device: str = "cpu") -> Dict[str, torch.Tensor]:
@@ -146,7 +146,7 @@ def _apply_device_map(model: nn.Module, device_map: Dict[str, torch.device]) -> 
             module.to(device)
 
 
-class StandaloneGenerationMixin:
+class GenerationMixin:
     """
     Mixin class that provides generation capabilities for standalone models.
     
@@ -194,7 +194,7 @@ class StandaloneGenerationMixin:
         return True
 
 
-class StandalonePreTrainedModel(nn.Module, StandaloneGenerationMixin):
+class BaseModel(nn.Module, GenerationMixin):
     """
     Base class for standalone pretrained models.
     
@@ -522,8 +522,16 @@ class StandalonePreTrainedModel(nn.Module, StandaloneGenerationMixin):
         return f"{self.__class__.__name__}(config={self.config.model_type})"
 
 
+# Backward compatibility aliases
+StandalonePreTrainedModel = BaseModel
+StandaloneGenerationMixin = GenerationMixin
+
+
 __all__ = [
+    "BaseModel",
+    "GenerationMixin",
+    "BaseConfig",
+    # Backward compatibility
     "StandalonePreTrainedModel",
     "StandaloneGenerationMixin",
-    "BaseConfig",
 ]
