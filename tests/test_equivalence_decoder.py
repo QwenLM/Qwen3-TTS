@@ -20,8 +20,8 @@ from qwen_tts.core.models.modeling_qwen3_tts import (
 
 # Standalone models
 from qwen3_tts_standalone.layers import (
-    Qwen3TTSAttentionStandalone,
-    Qwen3TTSDecoderLayerStandalone,
+    Attention as AttentionStandalone,
+    DecoderLayer as DecoderLayerStandalone,
 )
 from qwen3_tts_standalone.utils import DynamicCache as StandaloneDynamicCache
 
@@ -57,7 +57,7 @@ class TestDecoderLayerEquivalence:
         config = _create_decoder_layer_config()
         
         layer_orig = Qwen3TTSDecoderLayer(config, layer_idx=0)
-        layer_standalone = Qwen3TTSDecoderLayerStandalone(config, layer_idx=0)
+        layer_standalone = DecoderLayerStandalone(config, layer_idx=0)
         
         # Copy weights
         copy_weights(layer_orig, layer_standalone)
@@ -105,7 +105,7 @@ class TestDecoderLayerEquivalence:
         config = _create_decoder_layer_config()
         
         layer_orig = Qwen3TTSDecoderLayer(config, layer_idx=0)
-        layer_standalone = Qwen3TTSDecoderLayerStandalone(config, layer_idx=0)
+        layer_standalone = DecoderLayerStandalone(config, layer_idx=0)
         
         # Copy weights
         copy_weights(layer_orig, layer_standalone)
@@ -205,7 +205,7 @@ class TestAttentionWithCaching:
         config = _create_decoder_layer_config()
         
         attn_orig = Qwen3TTSAttention(config, layer_idx=0)
-        attn_standalone = Qwen3TTSAttentionStandalone(config, layer_idx=0)
+        attn_standalone = AttentionStandalone(config, layer_idx=0)
         
         # Copy weights
         copy_weights(attn_orig, attn_standalone)
@@ -284,7 +284,7 @@ class TestAttentionWithCaching:
         config = _create_decoder_layer_config()
         
         attn = Qwen3TTSAttention(config, layer_idx=0)
-        attn_standalone = Qwen3TTSAttentionStandalone(config, layer_idx=0)
+        attn_standalone = AttentionStandalone(config, layer_idx=0)
         
         # Copy weights
         copy_weights(attn, attn_standalone)

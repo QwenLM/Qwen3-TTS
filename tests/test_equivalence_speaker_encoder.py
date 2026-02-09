@@ -15,8 +15,8 @@ from qwen_tts.core.models.configuration_qwen3_tts import Qwen3TTSSpeakerEncoderC
 from qwen_tts.core.models.modeling_qwen3_tts import Qwen3TTSSpeakerEncoder
 
 # Standalone models
-from qwen3_tts_standalone.configuration import Qwen3TTSSpeakerEncoderConfigStandalone
-from qwen3_tts_standalone.speaker_encoder import Qwen3TTSSpeakerEncoderStandalone
+from qwen3_tts_standalone.configuration import SpeakerEncoderConfig as SpeakerEncoderConfigStandalone
+from qwen3_tts_standalone.speaker_encoder import SpeakerEncoder as SpeakerEncoderStandalone
 
 
 class TestSpeakerEncoderEquivalence:
@@ -36,7 +36,7 @@ class TestSpeakerEncoderEquivalence:
             enc_res2net_scale=8,
             enc_se_channels=128,
         )
-        config_standalone = Qwen3TTSSpeakerEncoderConfigStandalone(
+        config_standalone = SpeakerEncoderConfigStandalone(
             mel_dim=128,
             enc_dim=192,
             enc_channels=[512, 512, 512, 512, 1536],
@@ -48,7 +48,7 @@ class TestSpeakerEncoderEquivalence:
         )
         
         encoder_orig = Qwen3TTSSpeakerEncoder(config_orig)
-        encoder_standalone = Qwen3TTSSpeakerEncoderStandalone(config_standalone)
+        encoder_standalone = SpeakerEncoderStandalone(config_standalone)
         
         # Copy weights
         copy_weights(encoder_orig, encoder_standalone)
@@ -70,10 +70,10 @@ class TestSpeakerEncoderEquivalence:
         set_seed(42)
         
         config_orig = Qwen3TTSSpeakerEncoderConfig(mel_dim=128, enc_dim=256)
-        config_standalone = Qwen3TTSSpeakerEncoderConfigStandalone(mel_dim=128, enc_dim=256)
+        config_standalone = SpeakerEncoderConfigStandalone(mel_dim=128, enc_dim=256)
         
         encoder_orig = Qwen3TTSSpeakerEncoder(config_orig)
-        encoder_standalone = Qwen3TTSSpeakerEncoderStandalone(config_standalone)
+        encoder_standalone = SpeakerEncoderStandalone(config_standalone)
         copy_weights(encoder_orig, encoder_standalone)
         
         for seq_len in [50, 100, 200]:

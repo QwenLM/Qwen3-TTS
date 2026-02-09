@@ -19,7 +19,6 @@ Standalone base model class that replaces transformers.PreTrainedModel.
 This module provides:
 - Weight loading from safetensors and pytorch files
 - Device mapping support
-- Generation mixin functionality
 - HuggingFace Hub integration
 
 The goal is to provide a drop-in replacement for PreTrainedModel that doesn't
@@ -28,16 +27,15 @@ require the transformers library for core functionality.
 
 from __future__ import annotations
 
-import json
+
 import logging
 import os
-import re
 from glob import glob
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type, TypeVar, Union
 
 import torch
-from huggingface_hub import hf_hub_download, snapshot_download
+from huggingface_hub import snapshot_download
 from torch import nn
 from .configuration import BaseConfig
 
@@ -146,55 +144,7 @@ def _apply_device_map(model: nn.Module, device_map: Dict[str, torch.device]) -> 
             module.to(device)
 
 
-class GenerationMixin:
-    """
-    Mixin class that provides generation capabilities for standalone models.
-    
-    This is a simplified version that works with our standalone base class.
-    For more complex generation, models can still use transformers' GenerationMixin.
-    """
-    
-    def prepare_inputs_for_generation(
-        self,
-        input_ids: torch.LongTensor,
-        past_key_values: Optional[Any] = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        inputs_embeds: Optional[torch.FloatTensor] = None,
-        **kwargs,
-    ) -> Dict[str, Any]:
-        """
-        Prepare model inputs for generation.
-        
-        This method should be overridden by subclasses for model-specific logic.
-        """
-        # If we have past_key_values, only use last token
-        if past_key_values is not None:
-            input_ids = input_ids[:, -1:]
-            # Don't pass inputs_embeds if we're using past
-            inputs_embeds = None
-        
-        model_inputs = {}
-        
-        # Use inputs_embeds if provided (first generation step)
-        if inputs_embeds is not None:
-            model_inputs["inputs_embeds"] = inputs_embeds
-        else:
-            model_inputs["input_ids"] = input_ids
-        
-        if past_key_values is not None:
-            model_inputs["past_key_values"] = past_key_values
-        
-        if attention_mask is not None:
-            model_inputs["attention_mask"] = attention_mask
-        
-        return model_inputs
-    
-    def can_generate(self) -> bool:
-        """Returns True if the model can generate sequences."""
-        return True
-
-
-class BaseModel(nn.Module, GenerationMixin):
+class BaseModel(nn.Module):
     """
     Base class for standalone pretrained models.
     
@@ -202,7 +152,6 @@ class BaseModel(nn.Module, GenerationMixin):
     - Weight loading from safetensors/pytorch files
     - HuggingFace Hub downloading
     - Device mapping
-    - Basic generation support
     
     Subclasses should override:
     - config_class: The configuration class for this model
@@ -522,16 +471,7 @@ class BaseModel(nn.Module, GenerationMixin):
         return f"{self.__class__.__name__}(config={self.config.model_type})"
 
 
-# Backward compatibility aliases
-StandalonePreTrainedModel = BaseModel
-StandaloneGenerationMixin = GenerationMixin
-
-
 __all__ = [
     "BaseModel",
-    "GenerationMixin",
     "BaseConfig",
-    # Backward compatibility
-    "StandalonePreTrainedModel",
-    "StandaloneGenerationMixin",
 ]

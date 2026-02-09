@@ -14,15 +14,14 @@ These tests verify that:
 import pytest
 import torch
 
-from qwen3_tts_standalone import CodePredictor
+from qwen3_tts_standalone import CodePredictor, CodePredictorConfig
 from qwen3_tts_standalone.code_predictor import CodePredictorOutput
-from qwen3_tts_standalone import Qwen3TTSTalkerCodePredictorConfigStandalone
 
 
 @pytest.fixture
 def small_config():
     """Small configuration for fast testing."""
-    code_predictor_config = Qwen3TTSTalkerCodePredictorConfigStandalone(
+    code_predictor_config = CodePredictorConfig(
         vocab_size=2048,
         hidden_size=256,
         intermediate_size=512,
@@ -39,7 +38,7 @@ def small_config():
 @pytest.fixture
 def same_hidden_size_config():
     """Configuration where embedding_dim equals code predictor hidden size."""
-    code_predictor_config = Qwen3TTSTalkerCodePredictorConfigStandalone(
+    code_predictor_config = CodePredictorConfig(
         vocab_size=2048,
         hidden_size=256,
         intermediate_size=512,

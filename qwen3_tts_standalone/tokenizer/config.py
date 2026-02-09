@@ -151,7 +151,7 @@ class SpeechTokenizerConfig:
     def __post_init__(self):
         """Initialize nested configs if needed."""
         if self.encoder_config is None:
-            self.encoder_config = MimiEncoderConfigStandalone()
+            self.encoder_config = MimiEncoderConfig()
         elif isinstance(self.encoder_config, dict):
             self.encoder_config = MimiEncoderConfig.from_dict(self.encoder_config)
         
@@ -289,20 +289,9 @@ def convert_to_standalone_config(
     )
 
 
-# Backward compatibility aliases
-Qwen3TTSTokenizerV2ConfigStandalone = SpeechTokenizerConfig
-Qwen3TTSTokenizerV2DecoderConfigStandalone = SpeechDecoderConfig
-MimiEncoderConfigStandalone = MimiEncoderConfig
-
-
 __all__ = [
-    # New names
     "SpeechTokenizerConfig",
     "SpeechDecoderConfig",
     "MimiEncoderConfig",
     "convert_to_standalone_config",
-    # Backward compatibility
-    "Qwen3TTSTokenizerV2ConfigStandalone",
-    "Qwen3TTSTokenizerV2DecoderConfigStandalone",
-    "MimiEncoderConfigStandalone",
 ]

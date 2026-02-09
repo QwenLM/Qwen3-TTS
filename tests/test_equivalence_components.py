@@ -19,9 +19,9 @@ from qwen_tts.core.models.modeling_qwen3_tts import (
 
 # Standalone models
 from qwen3_tts_standalone.layers import (
-    Qwen3TTSRMSNormStandalone,
-    Qwen3TTSRotaryEmbeddingStandalone,
-    Qwen3TTSTalkerTextMLPStandalone,
+    RMSNorm as RMSNormStandalone,
+    RotaryEmbedding as RotaryEmbeddingStandalone,
+    TalkerMLP as TalkerMLPStandalone,
 )
 
 
@@ -36,7 +36,7 @@ class TestRMSNormEquivalence:
         eps = 1e-6
         
         norm_orig = Qwen3TTSRMSNorm(hidden_size, eps=eps)
-        norm_standalone = Qwen3TTSRMSNormStandalone(hidden_size, eps=eps)
+        norm_standalone = RMSNormStandalone(hidden_size, eps=eps)
         
         # Copy weights
         copy_weights(norm_orig, norm_standalone)
@@ -59,7 +59,7 @@ class TestRMSNormEquivalence:
             set_seed(42)
             
             norm_orig = Qwen3TTSRMSNorm(hidden_size)
-            norm_standalone = Qwen3TTSRMSNormStandalone(hidden_size)
+            norm_standalone = RMSNormStandalone(hidden_size)
             copy_weights(norm_orig, norm_standalone)
             
             x = torch.randn(2, 10, hidden_size)
@@ -87,7 +87,7 @@ class TestMLPEquivalence:
         config = MinimalConfig()
         
         mlp_orig = Qwen3TTSTalkerTextMLP(config)
-        mlp_standalone = Qwen3TTSTalkerTextMLPStandalone(config)
+        mlp_standalone = TalkerMLPStandalone(config)
         
         # Copy weights
         copy_weights(mlp_orig, mlp_standalone)
@@ -122,7 +122,7 @@ class TestRotaryEmbeddingEquivalence:
         config = MinimalConfig()
         
         rope_orig = Qwen3TTSRotaryEmbedding(config)
-        rope_standalone = Qwen3TTSRotaryEmbeddingStandalone(config)
+        rope_standalone = RotaryEmbeddingStandalone(config)
         
         # Test input
         set_seed(42)
@@ -150,7 +150,7 @@ class TestRotaryEmbeddingEquivalence:
         config = MinimalConfig()
         
         rope_orig = Qwen3TTSRotaryEmbedding(config)
-        rope_standalone = Qwen3TTSRotaryEmbeddingStandalone(config)
+        rope_standalone = RotaryEmbeddingStandalone(config)
         
         # Test with offset positions
         x = torch.randn(2, 5, 128)

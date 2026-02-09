@@ -38,22 +38,22 @@ class TestStandalonePackageImports:
     def test_import_configurations(self):
         """Test that configuration classes can be imported."""
         from qwen3_tts_standalone import (
-            Qwen3TTSConfigStandalone,
-            Qwen3TTSTalkerConfigStandalone,
-            Qwen3TTSTalkerCodePredictorConfigStandalone,
-            Qwen3TTSSpeakerEncoderConfigStandalone,
+            TTSConfig,
+            TalkerConfig,
+            CodePredictorConfig,
+            SpeakerEncoderConfig,
         )
         assert all([
-            Qwen3TTSConfigStandalone,
-            Qwen3TTSTalkerConfigStandalone,
-            Qwen3TTSTalkerCodePredictorConfigStandalone,
-            Qwen3TTSSpeakerEncoderConfigStandalone,
+            TTSConfig,
+            TalkerConfig,
+            CodePredictorConfig,
+            SpeakerEncoderConfig,
         ])
     
     def test_import_processor(self):
         """Test that processor can be imported."""
-        from qwen3_tts_standalone import Qwen3TTSProcessor
-        assert Qwen3TTSProcessor is not None
+        from qwen3_tts_standalone import Processor
+        assert Processor is not None
     
     def test_import_utils(self):
         """Test that utils can be imported."""
@@ -71,8 +71,8 @@ class TestStandaloneCodePredictor:
     @pytest.fixture
     def small_config(self):
         """Create a small config for testing."""
-        from qwen3_tts_standalone import Qwen3TTSTalkerCodePredictorConfigStandalone
-        return Qwen3TTSTalkerCodePredictorConfigStandalone(
+        from qwen3_tts_standalone import CodePredictorConfig
+        return CodePredictorConfig(
             vocab_size=256,
             hidden_size=64,
             num_hidden_layers=2,
@@ -123,10 +123,10 @@ class TestStandaloneTalker:
     def small_talker_config(self):
         """Create a small Talker config for testing."""
         from qwen3_tts_standalone import (
-            Qwen3TTSTalkerConfigStandalone,
-            Qwen3TTSTalkerCodePredictorConfigStandalone,
+            TalkerConfig,
+            CodePredictorConfig,
         )
-        code_predictor_config = Qwen3TTSTalkerCodePredictorConfigStandalone(
+        code_predictor_config = CodePredictorConfig(
             vocab_size=256,
             hidden_size=64,
             num_hidden_layers=2,
@@ -144,7 +144,7 @@ class TestStandaloneTalker:
             "mrope_section": [2, 3, 3],  # sum = 8 = head_dim / 2
             "interleaved": False,
         }
-        return Qwen3TTSTalkerConfigStandalone(
+        return TalkerConfig(
             vocab_size=256,
             hidden_size=64,
             num_hidden_layers=2,

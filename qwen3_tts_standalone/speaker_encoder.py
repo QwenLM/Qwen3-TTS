@@ -196,13 +196,7 @@ def mel_spectrogram(y, n_fft, num_mels, sampling_rate, hop_size, win_size, fmin,
     return dynamic_range_compression_torch(mel_spec)
 
 
-# Backward compatibility alias
-Qwen3TTSSpeakerEncoderStandalone = SpeakerEncoder
-
-
 __all__ = [
     "TimeDelayNetBlock", "Res2NetBlock", "SqueezeExcitationBlock", "AttentiveStatisticsPooling",
     "SqueezeExcitationRes2NetBlock", "SpeakerEncoder", "mel_spectrogram", "dynamic_range_compression_torch",
-    # Backward compatibility
-    "Qwen3TTSSpeakerEncoderStandalone",
 ]
