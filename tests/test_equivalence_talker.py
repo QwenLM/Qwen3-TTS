@@ -20,8 +20,8 @@ from qwen_tts.core.models.modeling_qwen3_tts import (
 
 # Standalone models
 from qwen3_tts_standalone.layers import (
-    Qwen3TTSTalkerAttentionStandalone,
-    Qwen3TTSTalkerDecoderLayerStandalone,
+    TalkerAttention as TalkerAttentionStandalone,
+    TalkerDecoderLayer as TalkerDecoderLayerStandalone,
 )
 from qwen3_tts_standalone.utils import DynamicCache as StandaloneDynamicCache
 
@@ -61,7 +61,7 @@ class TestTalkerDecoderLayerEquivalence:
         config = _create_talker_config()
         
         layer_orig = Qwen3TTSTalkerDecoderLayer(config, layer_idx=0)
-        layer_standalone = Qwen3TTSTalkerDecoderLayerStandalone(config, layer_idx=0)
+        layer_standalone = TalkerDecoderLayerStandalone(config, layer_idx=0)
         
         # Copy weights
         copy_weights(layer_orig, layer_standalone)
@@ -110,7 +110,7 @@ class TestTalkerDecoderLayerEquivalence:
         config = _create_talker_config()
         
         layer_orig = Qwen3TTSTalkerDecoderLayer(config, layer_idx=0)
-        layer_standalone = Qwen3TTSTalkerDecoderLayerStandalone(config, layer_idx=0)
+        layer_standalone = TalkerDecoderLayerStandalone(config, layer_idx=0)
         
         # Copy weights
         copy_weights(layer_orig, layer_standalone)
@@ -210,7 +210,7 @@ class TestTalkerAttentionWithCaching:
         config = _create_talker_config()
         
         attn_orig = Qwen3TTSTalkerAttention(config, layer_idx=0)
-        attn_standalone = Qwen3TTSTalkerAttentionStandalone(config, layer_idx=0)
+        attn_standalone = TalkerAttentionStandalone(config, layer_idx=0)
         
         # Copy weights
         copy_weights(attn_orig, attn_standalone)
@@ -295,7 +295,7 @@ class TestTalkerCacheConsistency:
         
         # Create original and standalone layers
         layer_orig = Qwen3TTSTalkerDecoderLayer(config, layer_idx=0)
-        layer_standalone = Qwen3TTSTalkerDecoderLayerStandalone(config, layer_idx=0)
+        layer_standalone = TalkerDecoderLayerStandalone(config, layer_idx=0)
         copy_weights(layer_orig, layer_standalone)
         
         batch_size = 2

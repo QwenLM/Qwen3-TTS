@@ -11,8 +11,8 @@ import torch
 from tests.conftest import set_seed
 
 from qwen3_tts_standalone import (
-    Qwen3TTSTalkerConfigStandalone,
-    Qwen3TTSTalkerCodePredictorConfigStandalone,
+    TalkerConfig,
+    CodePredictorConfig,
     Talker,
 )
 from qwen3_tts_standalone.talker import TalkerOutput
@@ -29,7 +29,7 @@ def small_talker_config():
         "interleaved": False,
     }
     
-    code_predictor_config = Qwen3TTSTalkerCodePredictorConfigStandalone(
+    code_predictor_config = CodePredictorConfig(
         vocab_size=256,
         hidden_size=64,
         num_hidden_layers=2,
@@ -38,7 +38,7 @@ def small_talker_config():
         intermediate_size=128,
     )
     
-    talker_config = Qwen3TTSTalkerConfigStandalone(
+    talker_config = TalkerConfig(
         vocab_size=256,
         hidden_size=64,
         text_hidden_size=64,

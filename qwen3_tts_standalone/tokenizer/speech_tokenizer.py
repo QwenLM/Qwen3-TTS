@@ -328,12 +328,6 @@ class SpeechTokenizer:
         return int(self.config.decode_upsample_rate)
 
 
-# Backward compatibility alias
-Qwen3TTSSpeechTokenizer = SpeechTokenizer
-
-
 __all__ = [
     "SpeechTokenizer",
-    # Backward compatibility
-    "Qwen3TTSSpeechTokenizer",
 ]

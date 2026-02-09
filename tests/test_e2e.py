@@ -261,21 +261,21 @@ class TestE2EModelLoading:
     def test_standalone_config_import(self):
         """Test that standalone config classes can be imported."""
         from qwen3_tts_standalone.configuration import (
-            Qwen3TTSConfigStandalone,
-            Qwen3TTSTalkerConfigStandalone,
-            Qwen3TTSSpeakerEncoderConfigStandalone,
-            Qwen3TTSTalkerCodePredictorConfigStandalone,
+            TTSConfig,
+            TalkerConfig,
+            SpeakerEncoderConfig,
+            CodePredictorConfig,
         )
         
         # Verify they can be instantiated
-        speaker_config = Qwen3TTSSpeakerEncoderConfigStandalone()
+        speaker_config = SpeakerEncoderConfig()
         assert speaker_config.mel_dim == 128
         
-        code_predictor_config = Qwen3TTSTalkerCodePredictorConfigStandalone()
+        code_predictor_config = CodePredictorConfig()
         assert code_predictor_config.vocab_size == 2048
         
-        talker_config = Qwen3TTSTalkerConfigStandalone()
+        talker_config = TalkerConfig()
         assert talker_config.model_type == "qwen3_tts_talker"
         
-        main_config = Qwen3TTSConfigStandalone()
+        main_config = TTSConfig()
         assert main_config.model_type == "qwen3_tts"

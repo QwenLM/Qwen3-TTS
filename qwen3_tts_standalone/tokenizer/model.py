@@ -21,7 +21,7 @@ from torch.nn import Parameter
 from torch.nn import functional as F
 
 from .config import (
-    Qwen3TTSTokenizerV2ConfigStandalone,
+    SpeechTokenizerConfig,
     SpeechDecoderConfig,
 )
 from ..utils import (
@@ -192,7 +192,7 @@ class ConvNeXtBlock(nn.Module):
     
     def __init__(self, dim: int):
         super().__init__()
-        self.dwconv = Qwen3TTSTokenizerV2CausalConvNetStandalone(
+        self.dwconv = CausalConvNet(
             dim, dim, kernel_size=7, groups=dim, dilation=1,
         )
         self.norm = nn.LayerNorm(dim, eps=1e-6)
@@ -530,9 +530,9 @@ class SpeechDecoderResidualUnit(nn.Module):
     def __init__(self, dim: int = 16, dilation: int = 1):
         super().__init__()
         self.act1 = SnakeBeta(dim)
-        self.conv1 = Qwen3TTSTokenizerV2CausalConvNetStandalone(dim, dim, kernel_size=7, dilation=dilation)
+        self.conv1 = CausalConvNet(dim, dim, kernel_size=7, dilation=dilation)
         self.act2 = SnakeBeta(dim)
-        self.conv2 = Qwen3TTSTokenizerV2CausalConvNetStandalone(dim, dim, kernel_size=1)
+        self.conv2 = CausalConvNet(dim, dim, kernel_size=1)
 
     def forward(self, hidden_state):
         residual = hidden_state
@@ -721,7 +721,7 @@ class SpeechDecoder(nn.Module):
             output_dimension=config.codebook_dim,
         )
 
-        self.pre_conv = Qwen3TTSTokenizerV2CausalConvNetStandalone(
+        self.pre_conv = CausalConvNet(
             config.codebook_dim, config.latent_dim, kernel_size=3,
         )
 
@@ -735,13 +735,13 @@ class SpeechDecoder(nn.Module):
             )
         self.upsample = nn.ModuleList(upsample)
 
-        decoder = [Qwen3TTSTokenizerV2CausalConvNetStandalone(config.latent_dim, config.decoder_dim, 7)]
+        decoder = [CausalConvNet(config.latent_dim, config.decoder_dim, 7)]
         for i in range(len(config.upsample_rates)):
             decoder.append(SpeechDecoderBlock(config, i))
         output_dim = config.decoder_dim // 2 ** len(config.upsample_rates)
         decoder += [
             SnakeBeta(output_dim),
-            Qwen3TTSTokenizerV2CausalConvNetStandalone(output_dim, 1, 7),
+            CausalConvNet(output_dim, 1, 7),
         ]
         self.decoder = nn.ModuleList(decoder)
 
@@ -791,7 +791,7 @@ class SpeechTokenizerModel(nn.Module):
     use the transformers-based MimiModel directly.
     """
     
-    def __init__(self, config: Qwen3TTSTokenizerV2ConfigStandalone):
+    def __init__(self, config: SpeechTokenizerConfig):
         super().__init__()
         self.config = config
         
@@ -882,7 +882,7 @@ class SpeechTokenizerModel(nn.Module):
         with open(config_path, "r") as f:
             config_dict = json.load(f)
         
-        config = Qwen3TTSTokenizerV2ConfigStandalone.from_dict(config_dict)
+        config = SpeechTokenizerConfig.from_dict(config_dict)
         
         # Create model
         model = cls(config)
@@ -930,33 +930,7 @@ class SpeechTokenizerModel(nn.Module):
             logger.warning(f"Unexpected keys in decoder: {unexpected[:10]}...")
 
 
-# Backward compatibility aliases
-Qwen3TTSTokenizerV2ModelStandalone = SpeechTokenizerModel
-Qwen3TTSTokenizerV2DecoderStandalone = SpeechDecoder
-Qwen3TTSTokenizerV2EncoderOutputStandalone = SpeechTokenizerEncoderOutput
-Qwen3TTSTokenizerV2DecoderOutputStandalone = SpeechTokenizerDecoderOutput
-Qwen3TTSTokenizerV2CausalConvNetStandalone = CausalConvNet
-Qwen3TTSTokenizerV2CausalTransConvNetStandalone = CausalTransConvNet
-Qwen3TTSTokenizerV2ConvNeXtBlockStandalone = ConvNeXtBlock
-Qwen3TTSTokenizerV2DecoderRotaryEmbeddingStandalone = SpeechDecoderRotaryEmbedding
-Qwen3TTSTokenizerV2DecoderRMSNormStandalone = SpeechDecoderRMSNorm
-Qwen3TTSTokenizerV2DecoderLayerScaleStandalone = SpeechDecoderLayerScale
-Qwen3TTSTokenizerV2DecoderMlpStandalone = SpeechDecoderMlp
-Qwen3TTSTokenizerV2DecoderAttentionStandalone = SpeechDecoderAttention
-Qwen3TTSTokenizerV2DecoderTransformerLayerStandalone = SpeechDecoderTransformerLayer
-Qwen3TTSTokenizerV2DecoderTransformerModelStandalone = SpeechDecoderTransformerModel
-SnakeBetaStandalone = SnakeBeta
-Qwen3TTSTokenizerV2DecoderDecoderResidualUnitStandalone = SpeechDecoderResidualUnit
-Qwen3TTSTokenizerV2DecoderDecoderBlockStandalone = SpeechDecoderBlock
-EuclideanCodebookStandalone = EuclideanCodebook
-VectorQuantizationStandalone = VectorQuantization
-ResidualVectorQuantizationStandalone = ResidualVectorQuantization
-ResidualVectorQuantizerStandalone = ResidualVectorQuantizer
-SplitResidualVectorQuantizerStandalone = SplitResidualVectorQuantizer
-
-
 __all__ = [
-    # New names
     "SpeechTokenizerModel",
     "SpeechDecoder",
     "SpeechTokenizerEncoderOutput",
@@ -979,27 +953,4 @@ __all__ = [
     "ResidualVectorQuantization",
     "ResidualVectorQuantizer",
     "SplitResidualVectorQuantizer",
-    # Backward compatibility
-    "Qwen3TTSTokenizerV2ModelStandalone",
-    "Qwen3TTSTokenizerV2DecoderStandalone",
-    "Qwen3TTSTokenizerV2EncoderOutputStandalone",
-    "Qwen3TTSTokenizerV2DecoderOutputStandalone",
-    "Qwen3TTSTokenizerV2CausalConvNetStandalone",
-    "Qwen3TTSTokenizerV2CausalTransConvNetStandalone",
-    "Qwen3TTSTokenizerV2ConvNeXtBlockStandalone",
-    "Qwen3TTSTokenizerV2DecoderRotaryEmbeddingStandalone",
-    "Qwen3TTSTokenizerV2DecoderRMSNormStandalone",
-    "Qwen3TTSTokenizerV2DecoderLayerScaleStandalone",
-    "Qwen3TTSTokenizerV2DecoderMlpStandalone",
-    "Qwen3TTSTokenizerV2DecoderAttentionStandalone",
-    "Qwen3TTSTokenizerV2DecoderTransformerLayerStandalone",
-    "Qwen3TTSTokenizerV2DecoderTransformerModelStandalone",
-    "SnakeBetaStandalone",
-    "Qwen3TTSTokenizerV2DecoderDecoderResidualUnitStandalone",
-    "Qwen3TTSTokenizerV2DecoderDecoderBlockStandalone",
-    "EuclideanCodebookStandalone",
-    "VectorQuantizationStandalone",
-    "ResidualVectorQuantizationStandalone",
-    "ResidualVectorQuantizerStandalone",
-    "SplitResidualVectorQuantizerStandalone",
 ]

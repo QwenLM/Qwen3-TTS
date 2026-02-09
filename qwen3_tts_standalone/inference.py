@@ -909,13 +909,7 @@ class Qwen3TTSModel:
         return sorted(supported)
 
 
-# Backward compatibility aliases
-Qwen3TTSModelStandalone = Qwen3TTSModel
-
-
 __all__ = [
     "Qwen3TTSModel",
     "VoiceClonePromptItemStandalone",
-    # Backward compatibility
-    "Qwen3TTSModelStandalone",
 ]

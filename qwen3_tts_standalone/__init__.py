@@ -51,33 +51,19 @@ from .inference import Qwen3TTSModel
 # Base model
 from .base_model import BaseModel
 
-# Backward compatibility aliases
-Qwen3TTSSpeakerEncoderStandalone = SpeakerEncoder
-Qwen3TTSConfigStandalone = TTSConfig
-Qwen3TTSTalkerConfigStandalone = TalkerConfig
-Qwen3TTSTalkerCodePredictorConfigStandalone = CodePredictorConfig
-Qwen3TTSSpeakerEncoderConfigStandalone = SpeakerEncoderConfig
-Qwen3TTSSpeechTokenizer = SpeechTokenizer
-Qwen3TTSSpeechTokenizerConfig = SpeechTokenizerConfig
-Qwen3TTSSpeechTokenizerModel = SpeechTokenizerModel
-Qwen3TTSProcessor = Processor
-Qwen3TTSModelStandalone = Qwen3TTSModel
-StandalonePreTrainedModel = BaseModel
-
-
 __all__ = [
-    # Models (new names)
+    # Models
     "TTS",
     "Talker",
     "CodePredictor",
     "SpeakerEncoder",
-    # Configuration (new names)
+    # Configuration
     "TTSConfig",
     "TalkerConfig",
     "CodePredictorConfig",
     "SpeakerEncoderConfig",
     "BaseConfig",
-    # Tokenizer (new names)
+    # Tokenizer
     "SpeechTokenizer",
     "SpeechTokenizerConfig",
     "SpeechTokenizerModel",
@@ -87,18 +73,6 @@ __all__ = [
     "Qwen3TTSModel",
     # Base
     "BaseModel",
-    # Backward compatibility aliases
-    "Qwen3TTSSpeakerEncoderStandalone",
-    "Qwen3TTSConfigStandalone",
-    "Qwen3TTSTalkerConfigStandalone",
-    "Qwen3TTSTalkerCodePredictorConfigStandalone",
-    "Qwen3TTSSpeakerEncoderConfigStandalone",
-    "Qwen3TTSSpeechTokenizer",
-    "Qwen3TTSSpeechTokenizerConfig",
-    "Qwen3TTSSpeechTokenizerModel",
-    "Qwen3TTSProcessor",
-    "Qwen3TTSModelStandalone",
-    "StandalonePreTrainedModel",
 ]
 
 __version__ = "0.1.0"

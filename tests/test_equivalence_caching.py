@@ -19,7 +19,7 @@ from qwen_tts.core.models.modeling_qwen3_tts import (
 
 # Standalone models
 from qwen3_tts_standalone.layers import (
-    Qwen3TTSDecoderLayerStandalone,
+    DecoderLayer as DecoderLayerStandalone,
 )
 from qwen3_tts_standalone.utils import DynamicCache as StandaloneDynamicCache
 
@@ -55,7 +55,7 @@ class TestCacheConsistency:
         
         # Create original and standalone layers
         layer_orig = Qwen3TTSDecoderLayer(config, layer_idx=0)
-        layer_standalone = Qwen3TTSDecoderLayerStandalone(config, layer_idx=0)
+        layer_standalone = DecoderLayerStandalone(config, layer_idx=0)
         copy_weights(layer_orig, layer_standalone)
         
         batch_size = 2
@@ -163,7 +163,7 @@ class TestCacheConsistency:
         config = MinimalConfig()
         
         layer_orig = Qwen3TTSDecoderLayer(config, layer_idx=0)
-        layer_standalone = Qwen3TTSDecoderLayerStandalone(config, layer_idx=0)
+        layer_standalone = DecoderLayerStandalone(config, layer_idx=0)
         copy_weights(layer_orig, layer_standalone)
         
         batch_size = 1

@@ -20,19 +20,15 @@ import pytest
 # Standalone configurations (transformers-free)
 from qwen3_tts_standalone.configuration import (
     BaseConfig,
-    Qwen3TTSConfigStandalone,
-    Qwen3TTSTalkerConfigStandalone,
-    Qwen3TTSSpeakerEncoderConfigStandalone,
-    Qwen3TTSTalkerCodePredictorConfigStandalone,
+    TTSConfig,
+    TalkerConfig,
+    SpeakerEncoderConfig,
+    CodePredictorConfig,
     layer_type_validation,
     rope_config_validation,
-    convert_tts_config,
-    convert_talker_config,
-    convert_speaker_encoder_config,
-    convert_code_predictor_config,
 )
 
-# Original configurations (for conversion tests)
+# Original configurations (for equivalence tests)
 from qwen_tts.core.models.configuration_qwen3_tts import (
     Qwen3TTSConfig,
     Qwen3TTSTalkerConfig,
@@ -173,11 +169,11 @@ class TestBaseConfig:
 
 
 class TestSpeakerEncoderConfig:
-    """Test Qwen3TTSSpeakerEncoderConfigStandalone."""
+    """Test SpeakerEncoderConfig."""
 
     def test_default_values(self):
         """Test that default values are set correctly."""
-        config = Qwen3TTSSpeakerEncoderConfigStandalone()
+        config = SpeakerEncoderConfig()
         
         assert config.mel_dim == 128
         assert config.enc_dim == 1024
@@ -191,7 +187,7 @@ class TestSpeakerEncoderConfig:
 
     def test_custom_values(self):
         """Test configuration with custom values."""
-        config = Qwen3TTSSpeakerEncoderConfigStandalone(
+        config = SpeakerEncoderConfig(
             mel_dim=80,
             enc_dim=256,
             enc_channels=[256, 256, 512],
@@ -205,13 +201,13 @@ class TestSpeakerEncoderConfig:
 
     def test_serialization_roundtrip(self):
         """Test that config survives serialization roundtrip."""
-        original = Qwen3TTSSpeakerEncoderConfigStandalone(
+        original = SpeakerEncoderConfig(
             mel_dim=80,
             enc_dim=256,
         )
         
         d = original.to_dict()
-        restored = Qwen3TTSSpeakerEncoderConfigStandalone.from_dict(d)
+        restored = SpeakerEncoderConfig.from_dict(d)
         
         assert restored.mel_dim == original.mel_dim
         assert restored.enc_dim == original.enc_dim
@@ -219,11 +215,11 @@ class TestSpeakerEncoderConfig:
 
 
 class TestCodePredictorConfig:
-    """Test Qwen3TTSTalkerCodePredictorConfigStandalone."""
+    """Test CodePredictorConfig."""
 
     def test_default_values(self):
         """Test that default values are set correctly."""
-        config = Qwen3TTSTalkerCodePredictorConfigStandalone()
+        config = CodePredictorConfig()
         
         assert config.vocab_size == 2048
         assert config.hidden_size == 1024
@@ -237,7 +233,7 @@ class TestCodePredictorConfig:
 
     def test_layer_types_auto_generation(self):
         """Test that layer_types is auto-generated when not provided."""
-        config = Qwen3TTSTalkerCodePredictorConfigStandalone(
+        config = CodePredictorConfig(
             num_hidden_layers=5,
             use_sliding_window=False,
         )
@@ -246,7 +242,7 @@ class TestCodePredictorConfig:
 
     def test_layer_types_with_sliding_window(self):
         """Test layer_types generation with sliding window."""
-        config = Qwen3TTSTalkerCodePredictorConfigStandalone(
+        config = CodePredictorConfig(
             num_hidden_layers=32,
             use_sliding_window=True,
             max_window_layers=28,
@@ -259,27 +255,27 @@ class TestCodePredictorConfig:
     def test_rope_scaling_validation(self):
         """Test rope_scaling validation."""
         # Valid rope_scaling
-        config = Qwen3TTSTalkerCodePredictorConfigStandalone(
+        config = CodePredictorConfig(
             rope_scaling={"rope_type": "linear", "factor": 2.0}
         )
         assert config.rope_scaling["rope_type"] == "linear"
         
         # Invalid rope_type should raise
         with pytest.raises(ValueError, match="Invalid rope_type"):
-            Qwen3TTSTalkerCodePredictorConfigStandalone(
+            CodePredictorConfig(
                 rope_scaling={"rope_type": "invalid_type"}
             )
 
     def test_serialization_roundtrip(self):
         """Test that config survives serialization roundtrip."""
-        original = Qwen3TTSTalkerCodePredictorConfigStandalone(
+        original = CodePredictorConfig(
             vocab_size=4096,
             hidden_size=2048,
             rope_scaling={"rope_type": "linear", "factor": 2.0},
         )
         
         d = original.to_dict()
-        restored = Qwen3TTSTalkerCodePredictorConfigStandalone.from_dict(d)
+        restored = CodePredictorConfig.from_dict(d)
         
         assert restored.vocab_size == original.vocab_size
         assert restored.hidden_size == original.hidden_size
@@ -287,11 +283,11 @@ class TestCodePredictorConfig:
 
 
 class TestTalkerConfig:
-    """Test Qwen3TTSTalkerConfigStandalone."""
+    """Test TalkerConfig."""
 
     def test_default_values(self):
         """Test that default values are set correctly."""
-        config = Qwen3TTSTalkerConfigStandalone()
+        config = TalkerConfig()
         
         assert config.vocab_size == 3072
         assert config.hidden_size == 1024
@@ -301,14 +297,14 @@ class TestTalkerConfig:
 
     def test_nested_code_predictor_config(self):
         """Test that code_predictor_config is properly nested."""
-        config = Qwen3TTSTalkerConfigStandalone()
+        config = TalkerConfig()
         
-        assert isinstance(config.code_predictor_config, Qwen3TTSTalkerCodePredictorConfigStandalone)
+        assert isinstance(config.code_predictor_config, CodePredictorConfig)
         assert config.code_predictor_config.vocab_size == 2048
 
     def test_code_predictor_config_from_dict(self):
         """Test that code_predictor_config can be provided as dict."""
-        config = Qwen3TTSTalkerConfigStandalone(
+        config = TalkerConfig(
             code_predictor_config={"vocab_size": 4096, "hidden_size": 512}
         )
         
@@ -317,20 +313,20 @@ class TestTalkerConfig:
 
     def test_code_predictor_config_as_instance(self):
         """Test that code_predictor_config can be provided as instance."""
-        cp_config = Qwen3TTSTalkerCodePredictorConfigStandalone(vocab_size=8192)
-        config = Qwen3TTSTalkerConfigStandalone(code_predictor_config=cp_config)
+        cp_config = CodePredictorConfig(vocab_size=8192)
+        config = TalkerConfig(code_predictor_config=cp_config)
         
         assert config.code_predictor_config.vocab_size == 8192
 
     def test_serialization_roundtrip_with_nested(self):
         """Test that nested config survives serialization roundtrip."""
-        original = Qwen3TTSTalkerConfigStandalone(
+        original = TalkerConfig(
             vocab_size=4096,
             code_predictor_config={"vocab_size": 8192, "hidden_size": 2048}
         )
         
         d = original.to_dict()
-        restored = Qwen3TTSTalkerConfigStandalone.from_dict(d)
+        restored = TalkerConfig.from_dict(d)
         
         assert restored.vocab_size == original.vocab_size
         assert restored.code_predictor_config.vocab_size == 8192
@@ -338,11 +334,11 @@ class TestTalkerConfig:
 
 
 class TestMainConfig:
-    """Test Qwen3TTSConfigStandalone."""
+    """Test TTSConfig."""
 
     def test_default_values(self):
         """Test that default values are set correctly."""
-        config = Qwen3TTSConfigStandalone()
+        config = TTSConfig()
         
         assert config.im_start_token_id == 151644
         assert config.im_end_token_id == 151645
@@ -352,18 +348,18 @@ class TestMainConfig:
 
     def test_nested_configs(self):
         """Test that nested configs are properly initialized."""
-        config = Qwen3TTSConfigStandalone()
+        config = TTSConfig()
         
-        assert isinstance(config.talker_config, Qwen3TTSTalkerConfigStandalone)
-        assert isinstance(config.speaker_encoder_config, Qwen3TTSSpeakerEncoderConfigStandalone)
+        assert isinstance(config.talker_config, TalkerConfig)
+        assert isinstance(config.speaker_encoder_config, SpeakerEncoderConfig)
         assert isinstance(
             config.talker_config.code_predictor_config,
-            Qwen3TTSTalkerCodePredictorConfigStandalone
+            CodePredictorConfig
         )
 
     def test_nested_configs_from_dict(self):
         """Test that nested configs can be provided as dicts."""
-        config = Qwen3TTSConfigStandalone(
+        config = TTSConfig(
             talker_config={"vocab_size": 4096, "hidden_size": 2048},
             speaker_encoder_config={"mel_dim": 80, "enc_dim": 256},
         )
@@ -375,7 +371,7 @@ class TestMainConfig:
 
     def test_full_serialization_roundtrip(self):
         """Test full config with all nested configs survives roundtrip."""
-        original = Qwen3TTSConfigStandalone(
+        original = TTSConfig(
             talker_config={
                 "vocab_size": 4096,
                 "code_predictor_config": {"vocab_size": 8192}
@@ -392,7 +388,7 @@ class TestMainConfig:
         assert d["speaker_encoder_config"]["mel_dim"] == 80
         
         # Test roundtrip
-        restored = Qwen3TTSConfigStandalone.from_dict(d)
+        restored = TTSConfig.from_dict(d)
         assert restored.talker_config.vocab_size == 4096
         assert restored.talker_config.code_predictor_config.vocab_size == 8192
         assert restored.speaker_encoder_config.mel_dim == 80
@@ -401,7 +397,7 @@ class TestMainConfig:
 
     def test_save_and_load_full_config(self):
         """Test saving and loading full config to/from file."""
-        original = Qwen3TTSConfigStandalone(
+        original = TTSConfig(
             talker_config={"vocab_size": 4096},
             speaker_encoder_config={"enc_dim": 512},
             tokenizer_type="test-tokenizer",
@@ -410,7 +406,7 @@ class TestMainConfig:
         with tempfile.TemporaryDirectory() as tmpdir:
             original.save_pretrained(tmpdir)
             
-            loaded = Qwen3TTSConfigStandalone.from_pretrained(tmpdir)
+            loaded = TTSConfig.from_pretrained(tmpdir)
             
             assert loaded.talker_config.vocab_size == 4096
             assert loaded.speaker_encoder_config.enc_dim == 512
@@ -477,94 +473,6 @@ class TestValidationFunctions:
             rope_config_validation(MockConfig())
 
 
-class TestConfigConversion:
-    """Test conversion functions from transformers-based configs."""
-
-    def test_convert_speaker_encoder_config(self):
-        """Test converting speaker encoder config."""
-        old_config = Qwen3TTSSpeakerEncoderConfig(
-            mel_dim=80,
-            enc_dim=256,
-            enc_channels=[256, 512, 512],
-            sample_rate=16000,
-        )
-        
-        new_config = convert_speaker_encoder_config(old_config)
-        
-        assert isinstance(new_config, Qwen3TTSSpeakerEncoderConfigStandalone)
-        assert new_config.mel_dim == 80
-        assert new_config.enc_dim == 256
-        assert new_config.enc_channels == [256, 512, 512]
-        assert new_config.sample_rate == 16000
-
-    def test_convert_code_predictor_config(self):
-        """Test converting code predictor config."""
-        old_config = Qwen3TTSTalkerCodePredictorConfig(
-            vocab_size=4096,
-            hidden_size=2048,
-            num_hidden_layers=8,
-        )
-        
-        new_config = convert_code_predictor_config(old_config)
-        
-        assert isinstance(new_config, Qwen3TTSTalkerCodePredictorConfigStandalone)
-        assert new_config.vocab_size == 4096
-        assert new_config.hidden_size == 2048
-        assert new_config.num_hidden_layers == 8
-
-    def test_convert_talker_config(self):
-        """Test converting talker config with nested code predictor."""
-        old_config = Qwen3TTSTalkerConfig(
-            vocab_size=6144,
-            hidden_size=2048,
-            code_predictor_config={"vocab_size": 8192},
-        )
-        
-        new_config = convert_talker_config(old_config)
-        
-        assert isinstance(new_config, Qwen3TTSTalkerConfigStandalone)
-        assert new_config.vocab_size == 6144
-        assert new_config.hidden_size == 2048
-        assert isinstance(new_config.code_predictor_config, Qwen3TTSTalkerCodePredictorConfigStandalone)
-        assert new_config.code_predictor_config.vocab_size == 8192
-
-    def test_convert_tts_config(self):
-        """Test converting full TTS config with all nested configs."""
-        old_config = Qwen3TTSConfig(
-            talker_config={"vocab_size": 6144},
-            speaker_encoder_config={"mel_dim": 80},
-            tokenizer_type="qwen3-tts-tokenizer-v2",
-            tts_model_size="0.5B",
-        )
-        
-        new_config = convert_tts_config(old_config)
-        
-        assert isinstance(new_config, Qwen3TTSConfigStandalone)
-        assert isinstance(new_config.talker_config, Qwen3TTSTalkerConfigStandalone)
-        assert isinstance(new_config.speaker_encoder_config, Qwen3TTSSpeakerEncoderConfigStandalone)
-        assert new_config.talker_config.vocab_size == 6144
-        assert new_config.speaker_encoder_config.mel_dim == 80
-        assert new_config.tokenizer_type == "qwen3-tts-tokenizer-v2"
-        assert new_config.tts_model_size == "0.5B"
-
-    def test_converted_config_serialization(self):
-        """Test that converted config can be serialized and restored."""
-        old_config = Qwen3TTSConfig(
-            talker_config={"vocab_size": 6144},
-            speaker_encoder_config={"mel_dim": 80},
-        )
-        
-        new_config = convert_tts_config(old_config)
-        
-        # Serialize and restore
-        with tempfile.TemporaryDirectory() as tmpdir:
-            new_config.save_pretrained(tmpdir)
-            loaded = Qwen3TTSConfigStandalone.from_pretrained(tmpdir)
-            
-            assert loaded.talker_config.vocab_size == 6144
-            assert loaded.speaker_encoder_config.mel_dim == 80
-
-
 class TestConfigEquivalenceWithOriginal:
     """Test that standalone configs maintain equivalence with original configs."""
 
@@ -578,7 +486,7 @@ class TestConfigEquivalenceWithOriginal:
         }
         
         original = Qwen3TTSSpeakerEncoderConfig(**params)
-        standalone = Qwen3TTSSpeakerEncoderConfigStandalone(**params)
+        standalone = SpeakerEncoderConfig(**params)
         
         assert original.mel_dim == standalone.mel_dim
         assert original.enc_dim == standalone.enc_dim
@@ -595,7 +503,7 @@ class TestConfigEquivalenceWithOriginal:
         }
         
         original = Qwen3TTSTalkerCodePredictorConfig(**params)
-        standalone = Qwen3TTSTalkerCodePredictorConfigStandalone(**params)
+        standalone = CodePredictorConfig(**params)
         
         assert original.vocab_size == standalone.vocab_size
         assert original.hidden_size == standalone.hidden_size
@@ -612,7 +520,7 @@ class TestConfigEquivalenceWithOriginal:
         }
         
         original = Qwen3TTSTalkerConfig(**params)
-        standalone = Qwen3TTSTalkerConfigStandalone(**params)
+        standalone = TalkerConfig(**params)
         
         assert original.vocab_size == standalone.vocab_size
         assert original.hidden_size == standalone.hidden_size
@@ -629,7 +537,7 @@ class TestConfigEquivalenceWithOriginal:
         }
         
         original = Qwen3TTSConfig(**params)
-        standalone = Qwen3TTSConfigStandalone(**params)
+        standalone = TTSConfig(**params)
         
         assert original.tokenizer_type == standalone.tokenizer_type
         assert original.tts_model_size == standalone.tts_model_size

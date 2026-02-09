@@ -161,12 +161,6 @@ class _TokenizerWrapper:
         return self._tokenizer.decode(ids, skip_special_tokens=skip_special_tokens)
 
 
-# Backward compatibility alias
-Qwen3TTSProcessor = Processor
-
-
 __all__ = [
     "Processor",
-    # Backward compatibility
-    "Qwen3TTSProcessor",
 ]
