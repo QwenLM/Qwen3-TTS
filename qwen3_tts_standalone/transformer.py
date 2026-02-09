@@ -32,38 +32,7 @@ from .utils import (
 logger = logging.getLogger(__name__)
 
 
-class TalkerPreTrainedModel(BaseModel):
-    """Base class for Talker text models."""
-
-    config: TalkerConfig
-    base_model_prefix: str = "model"
-    supports_gradient_checkpointing: bool = True
-    _no_split_modules: list[str] = []
-    _skip_keys_device_placement: list[str] = ["past_key_values"]
-    _supports_flash_attn: bool = True
-    _supports_sdpa: bool = True
-    _supports_flex_attn: bool = True
-    _supports_cache_class: bool = True
-    _supports_quantized_cache: bool = True
-    _supports_static_cache: bool = False
-    _supports_attention_backend: bool = True
-
-    def _init_weights(self, module: nn.Module) -> None:
-        """Initialize weights for a module."""
-        std = getattr(self.config, "initializer_range", 0.02)
-        if isinstance(module, nn.Linear):
-            module.weight.data.normal_(mean=0.0, std=std)
-            if module.bias is not None:
-                module.bias.data.zero_()
-        elif isinstance(module, nn.Embedding):
-            module.weight.data.normal_(mean=0.0, std=std)
-            if module.padding_idx is not None:
-                module.weight.data[module.padding_idx].zero_()
-        elif isinstance(module, RMSNorm):
-            module.weight.data.fill_(1.0)
-
-
-class TalkerModel(TalkerPreTrainedModel):
+class TalkerModel(BaseModel):
     """
     Transformer decoder model for generating audio codec tokens.
 
@@ -80,13 +49,10 @@ class TalkerModel(TalkerPreTrainedModel):
     rotary_emb: RotaryEmbedding
     codec_embedding: nn.Embedding
     text_embedding: nn.Embedding
-    gradient_checkpointing: bool
-    padding_idx: Optional[int]
     vocab_size: int
 
     def __init__(self, config: TalkerConfig) -> None:
         super().__init__(config)
-        self.padding_idx = config.pad_token_id
         self.vocab_size = config.vocab_size
         self.layers = nn.ModuleList(
             [
@@ -96,22 +62,23 @@ class TalkerModel(TalkerPreTrainedModel):
         )
         self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.rotary_emb = RotaryEmbedding(config, multimodal=True)
-        self.gradient_checkpointing = False
         self.codec_embedding = nn.Embedding(config.vocab_size, config.hidden_size)
         self.text_embedding = nn.Embedding(config.text_vocab_size, config.text_hidden_size)
         self.post_init()
 
-    def get_input_embeddings(self) -> nn.Embedding:
-        """Return codec embedding layer."""
-        return self.codec_embedding
-
-    def get_text_embeddings(self) -> nn.Embedding:
-        """Return text embedding layer."""
-        return self.text_embedding
-
-    def set_input_embeddings(self, value: nn.Embedding) -> None:
-        """Set input embeddings."""
-        self.embed_tokens = value
+    def _init_weights(self, module: nn.Module) -> None:
+        """Initialize weights for a module."""
+        std = getattr(self.config, "initializer_range", 0.02)
+        if isinstance(module, nn.Linear):
+            module.weight.data.normal_(mean=0.0, std=std)
+            if module.bias is not None:
+                module.bias.data.zero_()
+        elif isinstance(module, nn.Embedding):
+            module.weight.data.normal_(mean=0.0, std=std)
+            if module.padding_idx is not None:
+                module.weight.data[module.padding_idx].zero_()
+        elif isinstance(module, RMSNorm):
+            module.weight.data.fill_(1.0)
 
     @can_return_tuple
     def forward(
@@ -198,19 +165,25 @@ class TalkerModel(TalkerPreTrainedModel):
         else:
             text_position_ids = position_ids[0]
 
-        mask_function = (
-            create_causal_mask
-            if self.config.sliding_window is None
-            else create_sliding_window_causal_mask
-        )
-        causal_mask = mask_function(
-            config=self.config,
-            input_embeds=inputs_embeds,
-            attention_mask=attention_mask,
-            cache_position=cache_position,
-            past_key_values=past_key_values,
-            position_ids=text_position_ids,
-        )
+        # For SDPA with no attention mask, we can skip mask creation
+        attn_impl = getattr(self.config, "_attn_implementation", "eager")
+        if attn_impl == "sdpa" and attention_mask is None:
+            causal_mask = None
+        elif self.config.sliding_window is None:
+            causal_mask = create_causal_mask(
+                input_embeds=inputs_embeds,
+                attention_mask=attention_mask,
+                cache_position=cache_position,
+                past_key_values=past_key_values,
+            )
+        else:
+            causal_mask = create_sliding_window_causal_mask(
+                input_embeds=inputs_embeds,
+                attention_mask=attention_mask,
+                cache_position=cache_position,
+                past_key_values=past_key_values,
+                sliding_window=self.config.sliding_window,
+            )
 
         hidden_states = inputs_embeds
         position_embeddings = self.rotary_emb(hidden_states, position_ids)
@@ -251,6 +224,5 @@ class TalkerModel(TalkerPreTrainedModel):
 
 
 __all__ = [
-    "TalkerPreTrainedModel",
     "TalkerModel",
 ]

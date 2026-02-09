@@ -459,19 +459,31 @@ class SpeechDecoderTransformerModel(nn.Module):
 
         # Create causal masks
         if not isinstance(attention_mask, dict):
-            mask_kwargs = {
-                "config": self.config,
-                "input_embeds": inputs_embeds,
-                "attention_mask": attention_mask,
-                "cache_position": cache_position,
-                "past_key_values": past_key_values,
-                "position_ids": position_ids,
-            }
-            causal_mask_mapping = {
-                "full_attention": create_causal_mask(**mask_kwargs),
-            }
-            if self.has_sliding_layers:
-                causal_mask_mapping["sliding_attention"] = create_sliding_window_causal_mask(**mask_kwargs)
+            # For SDPA with no attention mask, we can skip mask creation
+            attn_impl = getattr(self.config, "_attn_implementation", "eager")
+            if attn_impl == "sdpa" and attention_mask is None:
+                causal_mask_mapping = {
+                    "full_attention": None,
+                }
+                if self.has_sliding_layers:
+                    causal_mask_mapping["sliding_attention"] = None
+            else:
+                causal_mask_mapping = {
+                    "full_attention": create_causal_mask(
+                        input_embeds=inputs_embeds,
+                        attention_mask=attention_mask,
+                        cache_position=cache_position,
+                        past_key_values=past_key_values,
+                    ),
+                }
+                if self.has_sliding_layers:
+                    causal_mask_mapping["sliding_attention"] = create_sliding_window_causal_mask(
+                        input_embeds=inputs_embeds,
+                        attention_mask=attention_mask,
+                        cache_position=cache_position,
+                        past_key_values=past_key_values,
+                        sliding_window=self.config.sliding_window,
+                    )
         else:
             causal_mask_mapping = attention_mask
 
