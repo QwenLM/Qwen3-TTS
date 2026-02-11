@@ -50,9 +50,9 @@ python sft_12hz.py \
   --init_model_path Qwen/Qwen3-TTS-12Hz-1.7B-Base \
   --output_model_path output \
   --train_jsonl train_with_codes.jsonl \
-  --batch_size 2 \
-  --lr 2e-5 \
-  --num_epochs 3 \
+  --batch_size 32 \
+  --lr 2e-6 \
+  --num_epochs 10 \
   --speaker_name speaker_test
 ```
 

@@ -326,7 +326,7 @@ class Qwen3TTSTokenizer:
         else:
             # List[Tensor/np]
             audio_codes_list = [_to_tensor(c, dtype=torch.long) for c in audio_codes_list]
-            audio_codes_padded = pad_sequence(audio_codes_list, batch_first=True, padding_value=0).to(self.device)
+            audio_codes_padded = pad_sequence(audio_codes_list, batch_first=True, padding_value=-1).to(self.device)
 
         with torch.inference_mode():
             if model_type == "qwen3_tts_tokenizer_25hz":
