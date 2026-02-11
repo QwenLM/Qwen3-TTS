@@ -425,10 +425,10 @@ def mel_spectrogram(
     Returns:
         torch.Tensor: Mel spectrogram.
     """
-    if torch.min(y) < -1.0:
-        print(f"[WARNING] Min value of input waveform signal is {torch.min(y)}")
-    if torch.max(y) > 1.0:
-        print(f"[WARNING] Max value of input waveform signal is {torch.max(y)}")
+    # if torch.min(y) < -1.0:
+    #     print(f"[WARNING] Min value of input waveform signal is {torch.min(y)}")
+    # if torch.max(y) > 1.0:
+    #     print(f"[WARNING] Max value of input waveform signal is {torch.max(y)}")
 
     device = y.device
 
@@ -1239,7 +1239,11 @@ class Qwen3TTSTalkerCodePredictorModelForConditionalGeneration(Qwen3TTSPreTraine
 
         loss = None
         if labels is not None:
-            loss = self.loss_function(logits=logits, labels=labels, vocab_size=self.config.vocab_size, **kwargs)
+            loss = F.cross_entropy(
+                logits.reshape(-1, self.config.vocab_size),
+                labels.reshape(-1),
+                ignore_index=-100,
+            )
 
         return Qwen3TTSTalkerCodePredictorOutputWithPast(
             loss=loss,

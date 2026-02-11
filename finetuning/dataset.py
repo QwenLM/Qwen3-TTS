@@ -13,6 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import json
 from typing import Any, List, Tuple, Union
 
 import librosa
@@ -31,14 +32,33 @@ AudioLike = Union[
 MaybeList = Union[Any, List[Any]]
 
 class TTSDataset(Dataset):
-    def __init__(self, data_list, processor, config:Qwen3TTSConfig, lag_num = -1):
-        self.data_list = data_list
+    def __init__(self, data_list_or_path, processor, config:Qwen3TTSConfig, lag_num = -1):
         self.processor = processor
         self.lag_num = lag_num
         self.config = config
 
+        if isinstance(data_list_or_path, str):
+            # Lazy mode: build byte-offset index into the JSONL file
+            self._jsonl_path = data_list_or_path
+            self._offsets = []
+            with open(data_list_or_path, 'rb') as f:
+                while True:
+                    offset = f.tell()
+                    line = f.readline()
+                    if not line or not line.strip():
+                        break
+                    self._offsets.append(offset)
+            self.data_list = None
+        else:
+            # Legacy mode: data already loaded in memory
+            self._jsonl_path = None
+            self._offsets = None
+            self.data_list = data_list_or_path
+
     def __len__(self):
-        return len(self.data_list)
+        if self.data_list is not None:
+            return len(self.data_list)
+        return len(self._offsets)
     
     def _load_audio_to_np(self, x: str) -> Tuple[np.ndarray, int]:
         
@@ -117,30 +137,45 @@ class TTSDataset(Dataset):
 
 
 
+    def _get_item_data(self, idx):
+        """Get the raw dict for an item, either from memory or by lazy-reading from disk."""
+        if self.data_list is not None:
+            return self.data_list[idx]
+        # Lazy read: seek to the byte offset and parse just this one line
+        with open(self._jsonl_path, 'rb') as f:
+            f.seek(self._offsets[idx])
+            line = f.readline()
+        return json.loads(line)
+
     def __getitem__(self, idx):
-        item = self.data_list[idx]
+        item = self._get_item_data(idx)
 
         audio_path  = item["audio"]
         text        = item["text"]
         audio_codes = item["audio_codes"]
-        language        = item.get('language','Auto')
-        ref_audio_path  = item['ref_audio']
+        # language        = item.get('language','Auto')
+        # ref_audio_path  = item['ref_audio']
 
         text = self._build_assistant_text(text)
         text_ids = self._tokenize_texts(text)
 
         audio_codes = torch.tensor(audio_codes, dtype=torch.long)
 
-        ref_audio_list = self._ensure_list(ref_audio_path)
-        normalized = self._normalize_audio_inputs(ref_audio_list)
-        wav,sr = normalized[0]
-
-        ref_mel = self.extract_mels(audio=wav, sr=sr)
+        # Load full audio for speaker embedding (will be processed in training loop)
+        target_sr = 24000
+        wav, sr = self._load_audio_to_np(audio_path)
+        if sr != target_sr:
+            wav = librosa.resample(wav, orig_sr=sr, target_sr=target_sr)
+        
+        # Return the full audio waveform (variable length)
+        ref_audio = wav
 
         return {
             "text_ids": text_ids[:,:-5],    # 1 , t
-            "audio_codes":audio_codes,      # t, 16
-            "ref_mel":ref_mel
+            "audio_codes": audio_codes,      # t, 16
+            "ref_audio": ref_audio,          # variable length numpy array at 24kHz
+            "path": audio_path,
+            "text": text,
         }
         
     def collate_fn(self, batch):
@@ -203,16 +238,18 @@ class TTSDataset(Dataset):
             codec_mask[i,   8+text_ids_len-1:8+text_ids_len-1+codec_ids_len] = True
             attention_mask[i, :8+text_ids_len+codec_ids_len] = True
         
-        ref_mels = [data['ref_mel'] for data in batch]
-        ref_mels = torch.cat(ref_mels,dim=0)
+        # Return audio arrays as a list (variable length, will be processed individually)
+        ref_audios = [data['ref_audio'] for data in batch]
 
         return {
-            'input_ids':input_ids,
-            'ref_mels':ref_mels,
-            'attention_mask':attention_mask,
-            'text_embedding_mask':text_embedding_mask.unsqueeze(-1),
-            'codec_embedding_mask':codec_embedding_mask.unsqueeze(-1),
-            'codec_0_labels':codec_0_labels,
+            'input_ids': input_ids,
+            'ref_audios': ref_audios,  # List of variable-length numpy arrays at 24kHz
+            'attention_mask': attention_mask,
+            'text_embedding_mask': text_embedding_mask.unsqueeze(-1),
+            'codec_embedding_mask': codec_embedding_mask.unsqueeze(-1),
+            'codec_0_labels': codec_0_labels,
             'codec_ids': codec_ids,
-            'codec_mask':codec_mask
+            'codec_mask': codec_mask,
+            "paths": [data['path'] for data in batch],
+            "texts": [data['text'] for data in batch],
         }

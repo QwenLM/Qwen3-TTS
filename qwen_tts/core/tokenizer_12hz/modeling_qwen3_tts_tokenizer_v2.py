@@ -866,8 +866,8 @@ class Qwen3TTSTokenizerV2Decoder(Qwen3TTSTokenizerV2DecoderPreTrainedModel):
         self.post_init()
 
     def forward(self, codes):
-        if codes.shape[1] != self.config.num_quantizers:
-            raise ValueError(f"Expected {self.config.num_quantizers} layer of codes, got {codes.shape[1]}")
+        # if codes.shape[1] != self.config.num_quantizers:
+        #     raise ValueError(f"Expected {self.config.num_quantizers} layer of codes, got {codes.shape[1]}")
 
         hidden = self.quantizer.decode(codes)
         hidden = self.pre_conv(hidden).transpose(1, 2)
