@@ -32,12 +32,12 @@ from .utils import (
 logger = logging.getLogger(__name__)
 
 
-class TalkerModel(BaseModel):
+class SemanticTransformer(BaseModel):
     """
-    Transformer decoder model for generating audio codec tokens.
+    Semantic transformer model for generating the first audio codec token.
 
-    This is the base model that generates the first codebook tokens.
-    It uses multimodal RoPE for positional encoding.
+    This is the base model that generates the first audio codec token.
+    It uses RoPE for positional encoding.
     """
 
     config_class: Type[TalkerConfig] = TalkerConfig
@@ -224,5 +224,5 @@ class TalkerModel(BaseModel):
 
 
 __all__ = [
-    "TalkerModel",
+    "SemanticTransformer",
 ]

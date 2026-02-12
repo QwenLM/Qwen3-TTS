@@ -18,7 +18,7 @@ from torch import Tensor
 from .code_predictor import CodePredictor
 from .configuration import TalkerConfig
 from .layers import ResizeMLP
-from .transformer import TalkerModel
+from .transformer import SemanticTransformer
 from .utils import (
     DynamicCache,
     sample_top_k_top_p,
@@ -60,7 +60,7 @@ class Talker(nn.Module):
     config: TalkerConfig
     vocab_size: int
     num_code_groups: int
-    model: TalkerModel
+    model: SemanticTransformer
     text_projection: ResizeMLP
     codec_head: nn.Linear
     code_predictor: CodePredictor
@@ -73,7 +73,7 @@ class Talker(nn.Module):
         self.num_code_groups = config.num_code_groups
 
         # Core transformer model
-        self.model = TalkerModel(config)
+        self.model = SemanticTransformer(config)
 
         # Text projection: maps text hidden size to talker hidden size
         self.text_projection = ResizeMLP(

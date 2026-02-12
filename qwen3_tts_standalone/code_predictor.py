@@ -44,8 +44,8 @@ class CodePredictor(nn.Module):
     - lm_head[i]: Predicts tokens for codebook (i+1)
 
     The autoregressive loop:
-        Step 0: [hidden, embed(cb0)] -> lm_head[0] -> cb1
-        Step 1: [hidden, embed(cb0), embed(cb1)] -> lm_head[1] -> cb2
+        Step 0: [hidden, embed_0(cb0)] -> lm_head[0] -> cb1
+        Step 1: [hidden, embed_0(cb0), embed_1(cb1)] -> lm_head[1] -> cb2
         ...and so on
     """
 

@@ -27,7 +27,7 @@ def main():
     parser.add_argument(
         "--text",
         type=str,
-        default="Hello world",
+        default="Hallo Welt. Das ist ein Test.",
         help="Target text to synthesize (default: Hello world)",
     )
     parser.add_argument(
@@ -40,16 +40,15 @@ def main():
         "--ref-text",
         type=str,
         default=(
-            "Good morning, John. So when you told me you were going to the "
-            "United Nations, I was like, oh my God, that's a lot of travel "
-            "right before Pitt tonight. I was right, but not as much as I "
-            "thought."
+            "Dazu gehört beispielsweise Eurojust, denn bis jetzt sind für den Europäischen Staatsanwalt keine zusätzlichen Mittel und kein zusätzliches Personal vorgesehen."
         ),
         help=(
             "Reference text (transcript of the audio). "
             "Optional if using x-vector-only mode."
         ),
     )
+    
+
     parser.add_argument(
         "--x-vector-only",
         action="store_true",
@@ -78,10 +77,16 @@ def main():
         help="Torch dtype (default: bfloat16)",
     )
     parser.add_argument(
+        "--instruct",
+        type=str,
+        default="Speak in a cheerful and excited tone. Finish with a laugh and then a silence.",
+        help="Instruction for synthesis",
+    )
+    parser.add_argument(
         "--language",
         type=str,
-        default="Auto",
-        help="Language for synthesis (default: Auto)",
+        default="German",
+        help="Language for synthesis (default: English)",
     )
     parser.add_argument(
         "--standalone",
@@ -186,6 +191,7 @@ def main():
         ref_audio=args.audio,
         ref_text=args.ref_text,
         x_vector_only_mode=args.x_vector_only,
+        instruct=args.instruct,
     )
 
     print(f"Saving output to {args.output}...")
