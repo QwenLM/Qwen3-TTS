@@ -48,6 +48,9 @@ from .processor import Processor
 # High-level inference API
 from .inference import Qwen3TTSModel
 
+# Simplified voice cloner (ICL-only)
+from .voice_cloner import VoiceCloner
+
 # Base model
 from .base_model import BaseModel
 
@@ -71,6 +74,8 @@ __all__ = [
     "Processor",
     # Inference
     "Qwen3TTSModel",
+    # Simplified voice cloner
+    "VoiceCloner",
     # Base
     "BaseModel",
 ]

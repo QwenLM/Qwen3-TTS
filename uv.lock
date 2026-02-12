@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 1
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -594,6 +594,15 @@ source = { registry = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west
 sdist = { url = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west-1.amazonaws.com/pypi/synth-pypi/simple/idna/3.11/idna-3.11.tar.gz", hash = "sha256:795dafcc9c04ed0c1fb032c2aa73654d8e8c5023a7df64a53f39190ada629902" }
 wheels = [
     { url = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west-1.amazonaws.com/pypi/synth-pypi/simple/idna/3.11/idna-3.11-py3-none-any.whl", hash = "sha256:771a87f49d9defaf64091e6e6fe9c18d4833f140bd19464795bc32d966ca37ea" },
+]
+
+[[package]]
+name = "iniconfig"
+version = "2.3.0"
+source = { registry = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west-1.amazonaws.com/pypi/synth-pypi/simple/" }
+sdist = { url = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west-1.amazonaws.com/pypi/synth-pypi/simple/iniconfig/2.3.0/iniconfig-2.3.0.tar.gz", hash = "sha256:c76315c77db068650d49c5b56314774a7804df16fee4402c1f19d6d15d8c4730" }
+wheels = [
+    { url = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west-1.amazonaws.com/pypi/synth-pypi/simple/iniconfig/2.3.0/iniconfig-2.3.0-py3-none-any.whl", hash = "sha256:f631c04d2c48c52b84d0d0549c99ff3859c98df65b3101406327ecc7d53fbf12" },
 ]
 
 [[package]]
@@ -1262,6 +1271,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pluggy"
+version = "1.6.0"
+source = { registry = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west-1.amazonaws.com/pypi/synth-pypi/simple/" }
+sdist = { url = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west-1.amazonaws.com/pypi/synth-pypi/simple/pluggy/1.6.0/pluggy-1.6.0.tar.gz", hash = "sha256:7dcc130b76258d33b90f61b658791dede3486c3e6bfb003ee5c9bfb396dd22f3" }
+wheels = [
+    { url = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west-1.amazonaws.com/pypi/synth-pypi/simple/pluggy/1.6.0/pluggy-1.6.0-py3-none-any.whl", hash = "sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746" },
+]
+
+[[package]]
 name = "pooch"
 version = "1.9.0"
 source = { registry = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west-1.amazonaws.com/pypi/synth-pypi/simple/" }
@@ -1407,10 +1425,6 @@ wheels = [
     { url = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west-1.amazonaws.com/pypi/synth-pypi/simple/pydantic-core/2.41.5/pydantic_core-2.41.5-cp314-cp314t-win32.whl", hash = "sha256:b4ececa40ac28afa90871c2cc2b9ffd2ff0bf749380fbdf57d165fd23da353aa" },
     { url = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west-1.amazonaws.com/pypi/synth-pypi/simple/pydantic-core/2.41.5/pydantic_core-2.41.5-cp314-cp314t-win_amd64.whl", hash = "sha256:80aa89cad80b32a912a65332f64a4450ed00966111b6615ca6816153d3585a8c" },
     { url = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west-1.amazonaws.com/pypi/synth-pypi/simple/pydantic-core/2.41.5/pydantic_core-2.41.5-cp314-cp314t-win_arm64.whl", hash = "sha256:35b44f37a3199f771c3eaa53051bc8a70cd7b54f333531c59e29fd4db5d15008" },
-    { url = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west-1.amazonaws.com/pypi/synth-pypi/simple/pydantic-core/2.41.5/pydantic_core-2.41.5-graalpy312-graalpy250_312_native-macosx_10_12_x86_64.whl", hash = "sha256:7da7087d756b19037bc2c06edc6c170eeef3c3bafcb8f532ff17d64dc427adfd" },
-    { url = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west-1.amazonaws.com/pypi/synth-pypi/simple/pydantic-core/2.41.5/pydantic_core-2.41.5-graalpy312-graalpy250_312_native-macosx_11_0_arm64.whl", hash = "sha256:aabf5777b5c8ca26f7824cb4a120a740c9588ed58df9b2d196ce92fba42ff8dc" },
-    { url = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west-1.amazonaws.com/pypi/synth-pypi/simple/pydantic-core/2.41.5/pydantic_core-2.41.5-graalpy312-graalpy250_312_native-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:c007fe8a43d43b3969e8469004e9845944f1a80e6acd47c150856bb87f230c56" },
-    { url = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west-1.amazonaws.com/pypi/synth-pypi/simple/pydantic-core/2.41.5/pydantic_core-2.41.5-graalpy312-graalpy250_312_native-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:76d0819de158cd855d1cbb8fcafdf6f5cf1eb8e470abe056d5d161106e38062b" },
 ]
 
 [[package]]
@@ -1438,6 +1452,22 @@ source = { registry = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west
 sdist = { url = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west-1.amazonaws.com/pypi/synth-pypi/simple/pyreadline3/3.5.4/pyreadline3-3.5.4.tar.gz", hash = "sha256:8d57d53039a1c75adba8e50dd3d992b28143480816187ea5efbd5c78e6c885b7" }
 wheels = [
     { url = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west-1.amazonaws.com/pypi/synth-pypi/simple/pyreadline3/3.5.4/pyreadline3-3.5.4-py3-none-any.whl", hash = "sha256:eaf8e6cc3c49bcccf145fc6067ba8643d1df34d604a1ec0eccbf7a18e6d3fae6" },
+]
+
+[[package]]
+name = "pytest"
+version = "9.0.2"
+source = { registry = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west-1.amazonaws.com/pypi/synth-pypi/simple/" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "iniconfig" },
+    { name = "packaging" },
+    { name = "pluggy" },
+    { name = "pygments" },
+]
+sdist = { url = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west-1.amazonaws.com/pypi/synth-pypi/simple/pytest/9.0.2/pytest-9.0.2.tar.gz", hash = "sha256:75186651a92bd89611d1d9fc20f0b4345fd827c41ccd5c299a868a05d70edf11" }
+wheels = [
+    { url = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west-1.amazonaws.com/pypi/synth-pypi/simple/pytest/9.0.2/pytest-9.0.2-py3-none-any.whl", hash = "sha256:711ffd45bf766d5264d487b917733b453d917afd2b0ad65223959f59089f875b" },
 ]
 
 [[package]]
@@ -1532,6 +1562,11 @@ dependencies = [
     { name = "transformers" },
 ]
 
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "accelerate", specifier = "==1.12.0" },
@@ -1539,11 +1574,13 @@ requires-dist = [
     { name = "gradio" },
     { name = "librosa" },
     { name = "onnxruntime" },
+    { name = "pytest", marker = "extra == 'dev'" },
     { name = "soundfile" },
     { name = "sox" },
     { name = "torchaudio" },
     { name = "transformers", specifier = "==4.57.3" },
 ]
+provides-extras = ["dev"]
 
 [[package]]
 name = "regex"
@@ -2020,8 +2057,8 @@ dependencies = [
     { name = "typing-extensions" },
 ]
 wheels = [
-    { url = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west-1.amazonaws.com/pypi/synth-pypi/simple/torch/2.10.0/torch-2.10.0-1-cp312-none-macosx_11_0_arm64.whl", hash = "sha256:6abb224c2b6e9e27b592a1c0015c33a504b00a0e0938f1499f7f514e9b7bfb5c" },
-    { url = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west-1.amazonaws.com/pypi/synth-pypi/simple/torch/2.10.0/torch-2.10.0-1-cp313-none-macosx_11_0_arm64.whl", hash = "sha256:7350f6652dfd761f11f9ecb590bfe95b573e2961f7a242eccb3c8e78348d26fe" },
+    { url = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west-1.amazonaws.com/pypi/synth-pypi/simple/torch/2.10.0/torch-2.10.0-2-cp312-none-macosx_11_0_arm64.whl", hash = "sha256:13ec4add8c3faaed8d13e0574f5cd4a323c11655546f91fbe6afa77b57423574" },
+    { url = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west-1.amazonaws.com/pypi/synth-pypi/simple/torch/2.10.0/torch-2.10.0-2-cp313-none-macosx_11_0_arm64.whl", hash = "sha256:e521c9f030a3774ed770a9c011751fb47c4d12029a3d6522116e48431f2ff89e" },
     { url = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west-1.amazonaws.com/pypi/synth-pypi/simple/torch/2.10.0/torch-2.10.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:5fd4117d89ffd47e3dcc71e71a22efac24828ad781c7e46aaaf56bf7f2796acf" },
     { url = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west-1.amazonaws.com/pypi/synth-pypi/simple/torch/2.10.0/torch-2.10.0-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:787124e7db3b379d4f1ed54dd12ae7c741c16a4d29b49c0226a89bea50923ffb" },
     { url = "https://synthesia-rnd-812634467557.d.codeartifact.eu-west-1.amazonaws.com/pypi/synth-pypi/simple/torch/2.10.0/torch-2.10.0-cp312-cp312-win_amd64.whl", hash = "sha256:2c66c61f44c5f903046cc696d088e21062644cbe541c7f1c4eaae88b2ad23547" },

@@ -41,7 +41,7 @@ class TestE2EGeneration:
     # Path to the test.py script
     TEST_SCRIPT = Path(__file__).parent.parent / "test.py"
     # Path to the default prompt audio
-    PROMPT_AUDIO = Path(__file__).parent.parent / "prompt.wav"
+    PROMPT_AUDIO = Path(__file__).parent.parent / "test_data" / "prompt.wav"
     # Model checkpoint
     CHECKPOINT = "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
     # Fixed seed for reproducibility
@@ -92,8 +92,8 @@ class TestE2EGeneration:
         return data, sr
     
     @pytest.mark.skipif(
-        not Path(__file__).parent.parent.joinpath("prompt.wav").exists(),
-        reason="prompt.wav not found"
+        not Path(__file__).parent.parent.joinpath("test_data", "prompt.wav").exists(),
+        reason="test_data/prompt.wav not found"
     )
     def test_original_model_generation(self, temp_output):
         """Test that the original model can generate audio."""
@@ -109,8 +109,8 @@ class TestE2EGeneration:
         assert sr == 24000, f"Expected 24kHz sample rate, got {sr}Hz"
     
     @pytest.mark.skipif(
-        not Path(__file__).parent.parent.joinpath("prompt.wav").exists(),
-        reason="prompt.wav not found"
+        not Path(__file__).parent.parent.joinpath("test_data", "prompt.wav").exists(),
+        reason="test_data/prompt.wav not found"
     )
     def test_standalone_model_generation(self, temp_output):
         """Test that the standalone model can generate audio."""
@@ -126,8 +126,8 @@ class TestE2EGeneration:
         assert sr == 24000, f"Expected 24kHz sample rate, got {sr}Hz"
     
     @pytest.mark.skipif(
-        not Path(__file__).parent.parent.joinpath("prompt.wav").exists(),
-        reason="prompt.wav not found"
+        not Path(__file__).parent.parent.joinpath("test_data", "prompt.wav").exists(),
+        reason="test_data/prompt.wav not found"
     )
     def test_models_produce_similar_output(self, temp_output):
         """Test that original and standalone models produce similar output with same seed.
@@ -178,8 +178,8 @@ class TestE2EGeneration:
                 os.unlink(f)
     
     @pytest.mark.skipif(
-        not Path(__file__).parent.parent.joinpath("prompt.wav").exists(),
-        reason="prompt.wav not found"
+        not Path(__file__).parent.parent.joinpath("test_data", "prompt.wav").exists(),
+        reason="test_data/prompt.wav not found"
     )
     def test_original_model_deterministic(self, temp_output):
         """Test that the original model produces identical output with the same seed."""
@@ -209,8 +209,8 @@ class TestE2EGeneration:
                 os.unlink(f)
     
     @pytest.mark.skipif(
-        not Path(__file__).parent.parent.joinpath("prompt.wav").exists(),
-        reason="prompt.wav not found"
+        not Path(__file__).parent.parent.joinpath("test_data", "prompt.wav").exists(),
+        reason="test_data/prompt.wav not found"
     )
     def test_standalone_model_deterministic(self, temp_output):
         """Test that the standalone model produces identical output with the same seed."""
