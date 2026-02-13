@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 import torch
+import torch.nn.functional as F
 from torch import nn, Tensor
 
 from .configuration import CodePredictorConfig
@@ -32,6 +33,42 @@ class CodePredictorOutput:
     """Output from CodePredictor.generate()."""
 
     sequences: Tensor  # [batch, num_code_groups - 1] predicted codebook tokens
+
+
+@dataclass
+class CodePredictorFinetuneOutput:
+    """Output from CodePredictor.forward_finetune()."""
+
+    logits: Tensor  # [batch, num_code_groups - 1, vocab_size]
+    loss: Optional[Tensor]  # scalar loss (if labels provided)
+
+
+def _causal_lm_loss(
+    logits: Tensor, labels: Tensor, vocab_size: int
+) -> Tensor:
+    """
+    Compute ForCausalLMLoss matching the transformers library implementation.
+
+    This applies the standard next-token-prediction shift:
+    shift_logits = logits[..., :-1, :] predicts shift_labels = labels[..., 1:]
+
+    Args:
+        logits: Predicted logits [batch, seq_len, vocab_size]
+        labels: Target labels [batch, seq_len]
+        vocab_size: Vocabulary size for reshaping
+
+    Returns:
+        Scalar cross-entropy loss.
+    """
+    logits = logits.float()
+    shift_logits = logits[..., :-1, :].contiguous()
+    shift_labels = labels[..., 1:].contiguous()
+
+    shift_logits = shift_logits.view(-1, vocab_size)
+    shift_labels = shift_labels.view(-1).to(shift_logits.device)
+
+    loss = F.cross_entropy(shift_logits, shift_labels, ignore_index=-100)
+    return loss
 
 
 class CodePredictor(nn.Module):
@@ -123,6 +160,61 @@ class CodePredictor(nn.Module):
             new_state_dict[new_key] = value
 
         self.load_state_dict(new_state_dict)
+
+    def forward_finetune(
+        self,
+        inputs_embeds: Tensor,
+        labels: Optional[Tensor] = None,
+    ) -> CodePredictorFinetuneOutput:
+        """
+        Forward pass for finetuning the code predictor.
+
+        This matches the original
+        Qwen3TTSTalkerCodePredictorModelForConditionalGeneration.forward_finetune().
+
+        The method:
+        1. Projects input embeddings through input_projection
+        2. Runs a full (non-cached) transformer forward pass
+        3. Extracts logits from each position using the respective lm_head
+        4. Computes ForCausalLMLoss (with standard shift) if labels are provided
+
+        Note: The loss uses the standard ForCausalLMLoss from transformers which
+        applies a shift (logits[:-1] predicts labels[1:]). This matches the
+        original implementation's behavior.
+
+        Args:
+            inputs_embeds: Input embeddings [batch, num_code_groups, embedding_dim].
+                Contains [talker_hidden_state, embed(cb0), embed(cb1), ..., embed(cb_{N-2})]
+            labels: Target codebook tokens [batch, num_code_groups - 1].
+                Contains [cb1, cb2, ..., cb_{N-1}]
+
+        Returns:
+            CodePredictorFinetuneOutput with logits and optional loss.
+        """
+        # Project to model hidden size (equivalent to small_to_mtp_projection)
+        hidden_states = self.input_projection(inputs_embeds)
+
+        # Run through transformer without caching
+        cache_position = torch.arange(
+            hidden_states.shape[1], device=hidden_states.device
+        )
+        hidden_states = self._transformer_forward(
+            hidden_states, cache=None, cache_position=cache_position
+        )
+
+        # Compute logits: for each codebook i (1..N-1), apply lm_head[i-1]
+        # to the hidden state at position i
+        logits = []
+        for i in range(1, self.config.num_code_groups):
+            logits.append(self.lm_head[i - 1](hidden_states[:, i]))
+        logits = torch.stack(logits, dim=1)  # [batch, num_code_groups - 1, vocab_size]
+
+        # Compute loss matching ForCausalLMLoss (with shift)
+        loss = None
+        if labels is not None:
+            loss = _causal_lm_loss(logits, labels, self.config.vocab_size)
+
+        return CodePredictorFinetuneOutput(logits=logits, loss=loss)
 
     def generate(
         self,
