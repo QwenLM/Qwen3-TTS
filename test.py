@@ -79,12 +79,12 @@ def main():
         help="Language for synthesis (default: English)",
     )
     parser.add_argument(
-        "--standalone",
-        action="store_true",
+        "--no-standalone",
+        action="store_false",
+        dest="standalone",
         help=(
-            "Use the standalone model (transformers-free). "
-            "Note: This model is still under development and may not "
-            "have full functionality yet."
+            "Disable the standalone model and use the transformers-based model instead. "
+            "By default, the standalone (transformers-free) model is used."
         ),
     )
     parser.add_argument(
@@ -190,6 +190,7 @@ def main():
             language=args.language,
             ref_audio=args.audio,
             ref_text=args.ref_text,
+            non_streaming_mode=True,
         )
     else:
         # Qwen3TTSModel.generate_voice_clone returns (List[audio], sr)
@@ -199,6 +200,7 @@ def main():
             ref_audio=args.audio,
             ref_text=args.ref_text,
             x_vector_only_mode=False,
+            non_streaming_mode=True,
         )
         audio = wavs[0]
     print(f"Saving output to {args.output}...")

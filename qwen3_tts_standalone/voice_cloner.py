@@ -427,12 +427,12 @@ class VoiceCloner(nn.Module):
         Returns:
             Tuple of (icl_input_embed, trailing_text_hidden)
         """
-        # Combine ref and target text, add EOS
+        # Combine ref and target text, add EOS 
         combined_text_ids = torch.cat([ref_ids, text_ids], dim=-1)
         text_embed = self.talker.text_projection(
             self.talker.text_embedding(combined_text_ids)
         )
-        text_embed = torch.cat([text_embed, tts_eos_embed], dim=1)
+        text_embed = torch.cat([text_embed, tts_eos_embed], dim=1) # shape [1, t_combined_text + 1, hidden_size]
         
         # Build codec embeddings from reference audio
         codec_embed_list = []
@@ -453,7 +453,7 @@ class VoiceCloner(nn.Module):
                 )
         
         # Sum all codebook embeddings
-        codec_embed = torch.cat(codec_embed_list, dim=1).sum(1).unsqueeze(0)
+        codec_embed = torch.cat(codec_embed_list, dim=1).sum(1).unsqueeze(0) # shape [1, t_audio, hidden_size]
         
         # Add codec BOS token
         codec_bos = self.talker.codec_embedding(
@@ -462,8 +462,8 @@ class VoiceCloner(nn.Module):
                 device=self.device,
                 dtype=text_ids.dtype,
             )
-        )
-        codec_embed = torch.cat([codec_bos, codec_embed], dim=1)
+        ) # shape [1, 1, hidden_size]
+        codec_embed = torch.cat([codec_bos, codec_embed], dim=1) # shape [1, t_audio + 1, hidden_size]
         
         # Compute lengths
         text_len = text_embed.shape[1]
@@ -471,18 +471,24 @@ class VoiceCloner(nn.Module):
         
         if non_streaming_mode:
             # Non-streaming: text + pad codec, then codec + pad text
+            # [Text, ..., Text, Pad, ..., Pad]
+            # [Pad, ..., Pad, Audio, ..., Audio]
+            # both are summed -> icl_input
             text_with_pad = text_embed + self.talker.codec_embedding(
                 torch.tensor(
                     [[self.config.talker_config.codec_pad_id] * text_len],
                     device=self.device,
                     dtype=text_ids.dtype,
                 )
-            )
-            codec_with_pad = codec_embed + tts_pad_embed
-            icl_input = torch.cat([text_with_pad, codec_with_pad], dim=1)
+            ) # shape [1, t_text, hidden_size] Here t_text is something new
+            codec_with_pad = codec_embed + tts_pad_embed # shape [1, t_audio, hidden_size] Here t_audio is something new
+            icl_input = torch.cat([text_with_pad, codec_with_pad], dim=1) # shape [1, t_text + t_audio, hidden_size] 
             return icl_input, tts_pad_embed
         else:
             # Streaming mode: interleave text and codec
+            # [Audio, Audio, Audio, ..., Audio]
+            # [Text, Text, Text, Pad, ..., Pad]
+            # both are summed -> icl_input
             if text_len > codec_len:
                 # Text is longer: use codec_len of text, rest is trailing
                 icl_input = text_embed[:, :codec_len] + codec_embed
@@ -492,15 +498,18 @@ class VoiceCloner(nn.Module):
                 text_padded = torch.cat(
                     [text_embed] + [tts_pad_embed] * (codec_len - text_len),
                     dim=1,
-                )
+                ) # shape [1, t_audio, hidden_size]
                 icl_input = text_padded + codec_embed
-                trailing_text = tts_pad_embed
+                trailing_text = tts_pad_embed # shape [1, 1, hidden_size]
             return icl_input, trailing_text
     
     def _get_special_embeddings(
         self, dtype: torch.dtype
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Get TTS special token embeddings (BOS, EOS, PAD)."""
+        """Get TTS special token embeddings (BOS, EOS, PAD).
+        
+        These are just learned embedding stored added to the text embedding.
+        """
         special_ids = torch.tensor(
             [[
                 self.config.tts_bos_token_id,
@@ -510,6 +519,7 @@ class VoiceCloner(nn.Module):
             device=self.device,
             dtype=dtype,
         )
+        # note that the text embeddings are projected with a small 2 layers MLP
         special_embeds = self.talker.text_projection(
             self.talker.text_embedding(special_ids)
         )
@@ -522,7 +532,14 @@ class VoiceCloner(nn.Module):
         speaker_embed: torch.Tensor,
         dtype: torch.dtype,
     ) -> torch.Tensor:
-        """Build codec prefill embeddings with language and speaker info."""
+        """Build codec prefill embeddings with language and speaker info.
+        
+        This build the prefill embeddings of shape [1, 6 or 7, hidden_size]
+        For the size 6 we have
+        [embedd_nothink, embedd_think_bos, embedd_think_eos, embedd_speaker, embedd_pad, embedd_bos]
+        For the size 7 we have
+        [embedd_think, embedd_think_bos, embedd_language, embedd_think_eos, embedd_speaker, embedd_pad, embedd_bos]
+        """
         tc = self.config.talker_config
         
         if language_id is None:
@@ -532,20 +549,20 @@ class VoiceCloner(nn.Module):
         
         codec_embed_0 = self.talker.codec_embedding(
             torch.tensor(prefill_list, device=self.device, dtype=dtype)
-        )
+        ) # Shape [1, 3 or 4, hidden_size]
         codec_embed_1 = self.talker.codec_embedding(
             torch.tensor(
                 [[tc.codec_pad_id, tc.codec_bos_id]],
                 device=self.device,
                 dtype=dtype,
             )
-        )
+        ) # Shape [1, 2, hidden_size]
         
         return torch.cat([
             codec_embed_0,
-            speaker_embed.view(1, 1, -1),
+            speaker_embed.view(1, 1, -1), # this add one tokens
             codec_embed_1,
-        ], dim=1)
+        ], dim=1) # Shape [1, 6 or 7, hidden_size]
     
     def _get_language_id(self, language: str) -> Optional[int]:
         """Get language ID from language name."""
@@ -627,42 +644,49 @@ class VoiceCloner(nn.Module):
             )
         
         # Extract speaker embedding
-        speaker_embed = self._extract_speaker_embedding(ref_wav, ref_sr)
+        speaker_embed = self._extract_speaker_embedding(ref_wav, ref_sr) # Shape [hidden_size]
         
         # Encode reference audio into codec tokens
-        ref_code = self._encode_reference_audio(ref_wav, ref_sr)
+        ref_code = self._encode_reference_audio(ref_wav, ref_sr) # Shape [t_audio, num_codebooks]
         ref_code = ref_code.to(self.device)
         
         # Tokenize texts
-        text_ids = self._tokenize_text(text)
-        ref_ids = self._tokenize_ref_text(ref_text)
+        text_ids = self._tokenize_text(text) # Shape [1, t_text]
+        ref_ids = self._tokenize_ref_text(ref_text) # Shape [1, t_ref_text]
         
         # Get language ID
-        language_id = self._get_language_id(language)
+        language_id = self._get_language_id(language) # int
         
         # Get special embeddings
         tts_bos_embed, tts_eos_embed, tts_pad_embed = self._get_special_embeddings(
             text_ids.dtype
-        )
+        ) # Shapes [1, 1, hidden_size], [1, 1, hidden_size], [1, 1, hidden_size]
         
         # Build codec prefill with speaker embedding
         codec_input = self._build_codec_prefill(language_id, speaker_embed, text_ids.dtype)
+        # Shape [1, 6 or 7, hidden_size]
+        # [embedd_think, embedd_think_bos, embedd_language (optional), embedd_think_eos, embedd_speaker, embedd_pad, embedd_bos]
         
-        # Build role embedding (first 3 tokens)
+        # Build role embedding (first 3 tokens: <|im_start|>, assistant, \n)
+        # This is the ChatML-style role prefix for the assistant turn
         role_embed = self.talker.text_projection(
             self.talker.text_embedding(text_ids[:, :3])
-        )
+        )  # Shape [1, 3, hidden_size]
         
-        # Build initial input
+        # Build initial input: tts_pad * (N-2) + tts_bos, then add codec embeddings
+        # The -2 accounts for: 1) tts_bos added separately, 2) codec_bos excluded via [:, :-1]
+        # This aligns text embeddings with codec embeddings for element-wise addition:
+        #   text:  [pad, pad, pad, pad, bos]  (5 elements for size 6 codec_input)
+        #   codec: [nothink/think, think_bos, (lang), think_eos, speaker, pad] (excludes final bos)
         prefill_embed = torch.cat(
             (
                 tts_pad_embed.expand(-1, codec_input.shape[1] - 2, -1),
                 tts_bos_embed,
             ),
             dim=1,
-        ) + codec_input[:, :-1]
+        ) + codec_input[:, :-1] # Shape [1, 5 or 6, hidden_size]
         
-        talker_input = torch.cat((role_embed, prefill_embed), dim=1)
+        talker_input = torch.cat((role_embed, prefill_embed), dim=1) # shape [1, 8 or 9, hidden_size]
         
         # Build ICL prompt
         icl_input, trailing_text = self._build_icl_prompt(
@@ -672,7 +696,7 @@ class VoiceCloner(nn.Module):
             tts_pad_embed=tts_pad_embed,
             tts_eos_embed=tts_eos_embed,
             non_streaming_mode=non_streaming_mode,
-        )
+        ) # shape [1, t_text + t_audio, hidden_size] (or something like that...)
         
         talker_input = torch.cat([talker_input, icl_input], dim=1)
         
@@ -681,7 +705,7 @@ class VoiceCloner(nn.Module):
         seq_len = talker_input.shape[1]
         attention_mask = torch.ones((batch_size, seq_len), device=self.device)
         
-        # Build suppress tokens list
+        # Build suppress tokens list (will have 0 probability of being generated)
         eos_token_id = self.config.talker_config.codec_eos_token_id
         suppress_tokens = [
             i for i in range(
