@@ -29,9 +29,8 @@ from .utils import (
 class TalkerOutput:
     """Output from a single Talker forward pass."""
 
-    logits: Tensor  # [batch_size, 1, vocab_size]
-    hidden_state: Tensor  # [batch_size, 1, hidden_size] - for code predictor
-    codec_ids: Optional[Tensor]  # [batch_size, num_code_groups] - all codebook IDs
+    logits: Tensor  # [batch_size, seq_len, vocab_size]
+    hidden_state: Tensor  # [batch_size, seq_len, hidden_size]
     past_key_values: Optional[DynamicCache]
 
 
@@ -166,41 +165,24 @@ class Talker(nn.Module):
         inputs_embeds: Tensor,
         attention_mask: Optional[Tensor] = None,
         past_key_values: Optional[DynamicCache] = None,
-        past_hidden: Optional[Tensor] = None,
         cache_position: Optional[Tensor] = None,
         use_cache: bool = True,
-        # Code predictor sampling params
-        subtalker_dosample: bool = True,
-        subtalker_top_k: int = 50,
-        subtalker_top_p: float = 1.0,
-        subtalker_temperature: float = 0.9,
-        # Generation tracking
-        is_prefill: bool = False,
-        last_predicted_token: Optional[Tensor] = None,
-        # Text embeddings for generation
-        trailing_text_hidden: Optional[Tensor] = None,
-        tts_pad_embed: Optional[Tensor] = None,
-        generation_step: int = 0,
     ) -> TalkerOutput:
         """
-        Single forward pass of the Talker.
+        Single forward pass of the Talker transformer.
+
+        This is a pure transformer forward pass. The code predictor is called
+        separately after sampling the first codebook token.
 
         Args:
             inputs_embeds: Input embeddings [batch_size, seq_len, hidden_size]
             attention_mask: Attention mask [batch_size, seq_len]
             past_key_values: KV cache from previous steps
-            past_hidden: Hidden state from previous step [batch_size, 1, hidden_size]
             cache_position: Current position in cache
             use_cache: Whether to use KV caching
-            subtalker_*: Sampling parameters for the code predictor
-            is_prefill: Whether this is the prefill phase
-            last_predicted_token: The first codebook token from the previous step
-            trailing_text_hidden: Text embeddings to add during generation
-            tts_pad_embed: Padding embedding when text is exhausted
-            generation_step: Current generation step (for text indexing)
 
         Returns:
-            TalkerOutput with logits, hidden states, codec IDs, and updated cache
+            TalkerOutput with logits, hidden states, and updated cache
         """
         batch_size = inputs_embeds.shape[0]
         seq_length = inputs_embeds.shape[1]
@@ -209,47 +191,6 @@ class Talker(nn.Module):
         position_ids = self._compute_rope_position_ids(
             attention_mask, cache_position, batch_size, seq_length
         )
-
-        # During generation (not prefill), predict higher codebooks and compute input embeddings
-        codec_ids: Optional[Tensor] = None
-        if not is_prefill and past_hidden is not None and last_predicted_token is not None:
-            # Get embedding of the last predicted first-codebook token
-            last_id_hidden = self.codec_embedding(last_predicted_token)
-
-            # Use code predictor to generate higher codebook tokens
-            predictor_input = torch.cat((past_hidden, last_id_hidden), dim=1)
-            predictor_result = self.code_predictor.generate(
-                inputs_embeds=predictor_input,
-                max_new_tokens=self.num_code_groups - 1,
-                do_sample=subtalker_dosample,
-                top_k=subtalker_top_k,
-                top_p=subtalker_top_p,
-                temperature=subtalker_temperature,
-            )
-
-            # Combine all codebook tokens: [first_codebook, higher_codebooks...]
-            codec_ids = torch.cat((last_predicted_token, predictor_result.sequences), dim=-1)
-
-            # Sum embeddings from all codebooks for the input
-            codec_hiddens: list[Tensor] = [last_id_hidden]
-            for i in range(self.num_code_groups - 1):
-                codec_embed = self.code_predictor.codec_embedding[i](
-                    predictor_result.sequences[..., i : i + 1]
-                )
-                codec_hiddens.append(codec_embed)
-
-            # Sum all codebook embeddings
-            inputs_embeds = torch.cat(codec_hiddens, dim=1).sum(1, keepdim=True)
-
-            # Add trailing text embeddings
-            if trailing_text_hidden is not None:
-                if generation_step < trailing_text_hidden.shape[1]:
-                    inputs_embeds = (
-                        inputs_embeds
-                        + trailing_text_hidden[:, generation_step : generation_step + 1, :]
-                    )
-                elif tts_pad_embed is not None:
-                    inputs_embeds = inputs_embeds + tts_pad_embed
 
         # Forward through transformer
         outputs = self.model(
@@ -267,10 +208,87 @@ class Talker(nn.Module):
 
         return TalkerOutput(
             logits=logits,
-            hidden_state=hidden_states[:, -1:, :],
-            codec_ids=codec_ids,
+            hidden_state=hidden_states,
             past_key_values=outputs.past_key_values,
         )
+
+    def predict_higher_codebooks(
+        self,
+        hidden_state: Tensor,
+        first_codebook_token: Tensor,
+        do_sample: bool = True,
+        top_k: int = 50,
+        top_p: float = 1.0,
+        temperature: float = 0.9,
+    ) -> Tensor:
+        """
+        Predict higher codebook tokens using the code predictor.
+
+        This method takes the hidden state from the transformer and the sampled
+        first codebook token, then predicts the remaining codebook tokens.
+
+        Args:
+            hidden_state: Hidden state from transformer [batch_size, 1, hidden_size]
+            first_codebook_token: Sampled first codebook token [batch_size, 1]
+            do_sample: Whether to sample or use greedy decoding
+            top_k, top_p, temperature: Sampling parameters
+
+        Returns:
+            Full codec IDs tensor [batch_size, num_code_groups] containing all codebook tokens
+        """
+        # Get embedding of the first codebook token
+        first_token_embed = self.codec_embedding(first_codebook_token)
+
+        # Concatenate hidden state and first token embedding as input to code predictor
+        predictor_input = torch.cat((hidden_state, first_token_embed), dim=1)
+
+        # Generate higher codebook tokens
+        predictor_result = self.code_predictor.generate(
+            inputs_embeds=predictor_input,
+            max_new_tokens=self.num_code_groups - 1,
+            do_sample=do_sample,
+            top_k=top_k,
+            top_p=top_p,
+            temperature=temperature,
+        )
+
+        # Combine first codebook + higher codebooks: [batch_size, num_code_groups]
+        codec_ids = torch.cat((first_codebook_token, predictor_result.sequences), dim=-1)
+
+        return codec_ids
+
+    def compute_codec_embeddings(
+        self,
+        codec_ids: Tensor,
+    ) -> Tensor:
+        """
+        Compute summed embeddings from all codebook tokens.
+
+        This computes the input embedding for the next transformer step by
+        summing embeddings from all codebook tokens.
+
+        Args:
+            codec_ids: Full codec IDs [batch_size, num_code_groups]
+
+        Returns:
+            Summed codec embeddings [batch_size, 1, hidden_size]
+        """
+        codec_hiddens: list[Tensor] = []
+
+        # First codebook uses the main codec embedding
+        codec_hiddens.append(
+            self.codec_embedding(codec_ids[:, 0:1])
+        )
+
+        # Higher codebooks use code predictor's embeddings
+        for i in range(self.num_code_groups - 1):
+            codec_embed = self.code_predictor.codec_embedding[i](
+                codec_ids[:, i + 1 : i + 2]
+            )
+            codec_hiddens.append(codec_embed)
+
+        # Sum all codebook embeddings: [batch_size, num_code_groups, hidden] -> [batch_size, 1, hidden]
+        return torch.cat(codec_hiddens, dim=1).sum(dim=1, keepdim=True)
 
     def generate(
         self,
@@ -296,6 +314,15 @@ class Talker(nn.Module):
     ) -> TalkerGenerateOutput:
         """
         Generate codec tokens autoregressively.
+
+        The generation flow is:
+        1. Prefill: Run transformer on initial embeddings, sample first token,
+           then predict all codebook tokens for that step
+        2. Generation loop: Use previous step's codec embeddings + text as input,
+           run transformer, sample first token, predict all codebook tokens
+
+        This ensures all codebook tokens are predicted using the CURRENT hidden state,
+        rather than the previous step's hidden state.
 
         Args:
             inputs_embeds: Initial input embeddings [batch_size, seq_len, hidden_size]
@@ -328,18 +355,18 @@ class Talker(nn.Module):
         self.rope_deltas = None
 
         # === PREFILL PHASE ===
+        # 1. Run transformer forward on initial embeddings
         prefill_output = self.forward(
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
             past_key_values=past_key_values,
             use_cache=True,
-            is_prefill=True,
         )
 
         past_key_values = prefill_output.past_key_values
-        past_hidden = prefill_output.hidden_state
+        hidden_state = prefill_output.hidden_state[:, -1:, :]  # [batch, 1, hidden]
 
-        # Sample first token
+        # 2. Sample first codebook token from logits
         logits = prefill_output.logits[:, -1, :]
         first_token = self._sample_next_token(
             logits,
@@ -354,13 +381,27 @@ class Talker(nn.Module):
             min_new_tokens,
             eos_token_id,
         )
+        first_token_2d = first_token.unsqueeze(-1)  # [batch, 1]
 
-        # Track generated tokens (keep 2D shape [batch, 1] for embedding lookup)
-        generated_tokens: list[Tensor] = [first_token.unsqueeze(-1)]
-        all_codec_ids: list[Tensor] = []
-        all_hidden_states: list[tuple[Tensor, Optional[Tensor]]] = (
-            [(prefill_output.hidden_state, None)] if output_hidden_states else []
+        # 3. Predict higher codebook tokens using current hidden state
+        first_codec_ids = self.predict_higher_codebooks(
+            hidden_state=hidden_state,
+            first_codebook_token=first_token_2d,
+            do_sample=subtalker_dosample,
+            top_k=subtalker_top_k,
+            top_p=subtalker_top_p,
+            temperature=subtalker_temperature,
         )
+
+        # Track generated tokens and codec IDs
+        generated_tokens: list[Tensor] = [first_token_2d]
+        all_codec_ids: list[Tensor] = [first_codec_ids]
+        all_hidden_states: list[tuple[Tensor, Optional[Tensor]]] = (
+            [(hidden_state, first_codec_ids)] if output_hidden_states else []
+        )
+
+        # Store last codec IDs for computing next step's input embeddings
+        last_codec_ids = first_codec_ids
 
         # Update attention mask for generation
         if attention_mask is not None:
@@ -372,53 +413,40 @@ class Talker(nn.Module):
                 dim=-1,
             )
 
-        generation_step = 0
-
         # === GENERATION LOOP ===
         for step in range(1, max_new_tokens):
             cache_position = torch.tensor(
                 [past_key_values.get_seq_length()], device=device
             )
 
-            # Placeholder embeddings - will be replaced in forward() during generation
-            step_embeds = torch.zeros(
-                (batch_size, 1, self.config.hidden_size),
-                device=device,
-                dtype=inputs_embeds.dtype,
-            )
+            # 1. Compute input embeddings from previous step's codec IDs
+            step_embeds = self.compute_codec_embeddings(last_codec_ids)
 
-            # Forward pass - the actual input embeddings are computed inside forward()
-            # when is_prefill=False, using the code predictor and trailing text
+            # Add trailing text embeddings (streaming text input)
+            generation_step = step - 1  # 0-indexed for text
+            if trailing_text_hidden is not None:
+                if generation_step < trailing_text_hidden.shape[1]:
+                    step_embeds = (
+                        step_embeds
+                        + trailing_text_hidden[:, generation_step : generation_step + 1, :]
+                    )
+                elif tts_pad_embed is not None:
+                    step_embeds = step_embeds + tts_pad_embed
+
+            # 2. Run transformer forward
             output = self.forward(
                 inputs_embeds=step_embeds,
                 attention_mask=attention_mask,
                 past_key_values=past_key_values,
-                past_hidden=past_hidden,
                 cache_position=cache_position,
                 use_cache=True,
-                subtalker_dosample=subtalker_dosample,
-                subtalker_top_k=subtalker_top_k,
-                subtalker_top_p=subtalker_top_p,
-                subtalker_temperature=subtalker_temperature,
-                is_prefill=False,
-                last_predicted_token=generated_tokens[-1],
-                trailing_text_hidden=trailing_text_hidden,
-                tts_pad_embed=tts_pad_embed,
-                generation_step=generation_step,
             )
 
             past_key_values = output.past_key_values
-            past_hidden = output.hidden_state
+            hidden_state = output.hidden_state[:, -1:, :]  # [batch, 1, hidden]
 
-            if output.codec_ids is not None:
-                all_codec_ids.append(output.codec_ids)
-
-            if output_hidden_states:
-                all_hidden_states.append((output.hidden_state, output.codec_ids))
-
-            # Sample next token
+            # 3. Sample first codebook token
             logits = output.logits[:, -1, :]
-            # Build 2D sequence for repetition penalty: [batch, seq_len]
             generated_sequence = torch.cat(generated_tokens, dim=1)
             next_token = self._sample_next_token(
                 logits,
@@ -433,9 +461,25 @@ class Talker(nn.Module):
                 min_new_tokens,
                 eos_token_id,
             )
+            next_token_2d = next_token.unsqueeze(-1)
 
-            generated_tokens.append(next_token.unsqueeze(-1))
-            generation_step += 1
+            # 4. Predict higher codebook tokens using current hidden state
+            codec_ids = self.predict_higher_codebooks(
+                hidden_state=hidden_state,
+                first_codebook_token=next_token_2d,
+                do_sample=subtalker_dosample,
+                top_k=subtalker_top_k,
+                top_p=subtalker_top_p,
+                temperature=subtalker_temperature,
+            )
+
+            # Track results
+            generated_tokens.append(next_token_2d)
+            all_codec_ids.append(codec_ids)
+            last_codec_ids = codec_ids
+
+            if output_hidden_states:
+                all_hidden_states.append((hidden_state, codec_ids))
 
             # Update attention mask
             if attention_mask is not None:

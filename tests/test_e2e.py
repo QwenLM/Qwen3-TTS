@@ -97,10 +97,11 @@ class TestE2EGeneration:
     )
     def test_original_model_generation(self, temp_output):
         """Test that the original model can generate audio."""
-        result = self._run_test_script(output_path=temp_output)
+        # Use --no-standalone to force the transformers-based model
+        result = self._run_test_script("--no-standalone", output_path=temp_output)
         
         assert result.returncode == 0, (
-            f"test.py failed with exit code {result.returncode}\n"
+            f"test.py --no-standalone failed with exit code {result.returncode}\n"
             f"stdout: {result.stdout}\n"
             f"stderr: {result.stderr}"
         )
@@ -114,10 +115,11 @@ class TestE2EGeneration:
     )
     def test_standalone_model_generation(self, temp_output):
         """Test that the standalone model can generate audio."""
-        result = self._run_test_script("--standalone", output_path=temp_output)
+        # Standalone is the default, no flag needed
+        result = self._run_test_script(output_path=temp_output)
         
         assert result.returncode == 0, (
-            f"test.py --standalone failed with exit code {result.returncode}\n"
+            f"test.py (standalone) failed with exit code {result.returncode}\n"
             f"stdout: {result.stdout}\n"
             f"stderr: {result.stderr}"
         )
@@ -138,14 +140,14 @@ class TestE2EGeneration:
         2. Audio durations are within a reasonable range of each other
         3. Both models are deterministic (same seed = same output)
         """
-        # Generate with original model
+        # Generate with original model (use --no-standalone)
         output_original = temp_output.replace(".wav", "_original.wav")
-        result_original = self._run_test_script(output_path=output_original)
+        result_original = self._run_test_script("--no-standalone", output_path=output_original)
         assert result_original.returncode == 0, f"Original model failed: {result_original.stderr}"
         
-        # Generate with standalone model
+        # Generate with standalone model (default, no flag needed)
         output_standalone = temp_output.replace(".wav", "_standalone.wav")
-        result_standalone = self._run_test_script("--standalone", output_path=output_standalone)
+        result_standalone = self._run_test_script(output_path=output_standalone)
         assert result_standalone.returncode == 0, f"Standalone model failed: {result_standalone.stderr}"
         
         # Load both outputs
@@ -186,9 +188,9 @@ class TestE2EGeneration:
         output1 = temp_output.replace(".wav", "_run1.wav")
         output2 = temp_output.replace(".wav", "_run2.wav")
         
-        # Run twice with the same seed
-        result1 = self._run_test_script(output_path=output1)
-        result2 = self._run_test_script(output_path=output2)
+        # Run twice with the same seed (use --no-standalone for transformers model)
+        result1 = self._run_test_script("--no-standalone", output_path=output1)
+        result2 = self._run_test_script("--no-standalone", output_path=output2)
         
         assert result1.returncode == 0, f"First run failed: {result1.stderr}"
         assert result2.returncode == 0, f"Second run failed: {result2.stderr}"
@@ -217,9 +219,9 @@ class TestE2EGeneration:
         output1 = temp_output.replace(".wav", "_run1.wav")
         output2 = temp_output.replace(".wav", "_run2.wav")
         
-        # Run twice with the same seed
-        result1 = self._run_test_script("--standalone", output_path=output1)
-        result2 = self._run_test_script("--standalone", output_path=output2)
+        # Run twice with the same seed (standalone is default, no flag needed)
+        result1 = self._run_test_script(output_path=output1)
+        result2 = self._run_test_script(output_path=output2)
         
         assert result1.returncode == 0, f"First run failed: {result1.stderr}"
         assert result2.returncode == 0, f"Second run failed: {result2.stderr}"

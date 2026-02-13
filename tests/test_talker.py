@@ -82,8 +82,8 @@ class TestTalkerInstantiation:
 class TestTalkerForward:
     """Test Talker forward pass."""
 
-    def test_forward_prefill(self, small_talker_config):
-        """Test forward pass during prefill."""
+    def test_forward_basic(self, small_talker_config):
+        """Test basic forward pass (pure transformer)."""
         set_seed(42)
         talker = Talker(small_talker_config)
         talker.eval()
@@ -99,17 +99,15 @@ class TestTalkerForward:
             output = talker.forward(
                 inputs_embeds=inputs_embeds,
                 attention_mask=attention_mask,
-                is_prefill=True,
             )
         
         assert isinstance(output, TalkerOutput)
         assert output.logits.shape == (batch_size, seq_len, small_talker_config.vocab_size)
-        assert output.hidden_state.shape == (batch_size, 1, hidden_size)
-        assert output.codec_ids is None  # No codec IDs during prefill
+        assert output.hidden_state.shape == (batch_size, seq_len, hidden_size)
         assert output.past_key_values is not None
 
-    def test_forward_generation_step(self, small_talker_config):
-        """Test forward pass during generation."""
+    def test_forward_with_cache(self, small_talker_config):
+        """Test forward pass with KV cache for generation."""
         set_seed(42)
         talker = Talker(small_talker_config)
         talker.eval()
@@ -117,7 +115,7 @@ class TestTalkerForward:
         batch_size = 2
         hidden_size = small_talker_config.hidden_size
         
-        # Simulate prefill first
+        # First forward pass (prefill)
         inputs_embeds = torch.randn(batch_size, 10, hidden_size)
         attention_mask = torch.ones(batch_size, 10)
         
@@ -125,12 +123,11 @@ class TestTalkerForward:
             prefill_output = talker.forward(
                 inputs_embeds=inputs_embeds,
                 attention_mask=attention_mask,
-                is_prefill=True,
+                use_cache=True,
             )
             
-            # Now do a generation step
-            last_token = torch.randint(0, small_talker_config.vocab_size, (batch_size, 1))
-            step_embeds = torch.zeros(batch_size, 1, hidden_size)
+            # Generation step with cache
+            step_embeds = torch.randn(batch_size, 1, hidden_size)
             attention_mask = torch.cat([attention_mask, torch.ones(batch_size, 1)], dim=1)
             cache_position = torch.tensor([prefill_output.past_key_values.get_seq_length()])
             
@@ -138,17 +135,58 @@ class TestTalkerForward:
                 inputs_embeds=step_embeds,
                 attention_mask=attention_mask,
                 past_key_values=prefill_output.past_key_values,
-                past_hidden=prefill_output.hidden_state,
                 cache_position=cache_position,
-                is_prefill=False,
-                last_predicted_token=last_token,
             )
         
         assert isinstance(gen_output, TalkerOutput)
         assert gen_output.logits.shape == (batch_size, 1, small_talker_config.vocab_size)
         assert gen_output.hidden_state.shape == (batch_size, 1, hidden_size)
-        assert gen_output.codec_ids is not None
-        assert gen_output.codec_ids.shape == (batch_size, small_talker_config.num_code_groups)
+        assert gen_output.past_key_values is not None
+
+
+class TestTalkerHelperMethods:
+    """Test Talker helper methods for code prediction and embedding computation."""
+
+    def test_predict_higher_codebooks(self, small_talker_config):
+        """Test predicting higher codebook tokens."""
+        set_seed(42)
+        talker = Talker(small_talker_config)
+        talker.eval()
+        
+        batch_size = 2
+        hidden_size = small_talker_config.hidden_size
+        
+        hidden_state = torch.randn(batch_size, 1, hidden_size)
+        first_codebook_token = torch.randint(0, small_talker_config.vocab_size, (batch_size, 1))
+        
+        with torch.no_grad():
+            codec_ids = talker.predict_higher_codebooks(
+                hidden_state=hidden_state,
+                first_codebook_token=first_codebook_token,
+                do_sample=False,
+            )
+        
+        assert codec_ids.shape == (batch_size, small_talker_config.num_code_groups)
+        # First column should match the input first codebook token
+        assert torch.equal(codec_ids[:, 0:1], first_codebook_token)
+
+    def test_compute_codec_embeddings(self, small_talker_config):
+        """Test computing codec embeddings from codec IDs."""
+        set_seed(42)
+        talker = Talker(small_talker_config)
+        talker.eval()
+        
+        batch_size = 2
+        hidden_size = small_talker_config.hidden_size
+        num_code_groups = small_talker_config.num_code_groups
+        
+        # Create random codec IDs
+        codec_ids = torch.randint(0, small_talker_config.vocab_size, (batch_size, num_code_groups))
+        
+        with torch.no_grad():
+            embeddings = talker.compute_codec_embeddings(codec_ids)
+        
+        assert embeddings.shape == (batch_size, 1, hidden_size)
 
 
 class TestTalkerGenerate:
@@ -181,7 +219,8 @@ class TestTalkerGenerate:
         
         assert output.sequences.shape[0] == batch_size
         assert output.sequences.shape[1] <= 5  # May stop early due to EOS
-        assert len(output.all_codec_ids) <= 4  # codec_ids are created after first token
+        # codec_ids are now created for all tokens including first
+        assert len(output.all_codec_ids) == output.sequences.shape[1]
 
     def test_generate_deterministic(self, small_talker_config):
         """Test that greedy generation is deterministic."""
