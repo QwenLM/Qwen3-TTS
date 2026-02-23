@@ -147,10 +147,11 @@ def train():
             unwrapped_model = accelerator.unwrap_model(model)
             state_dict = {k: v.detach().to("cpu") for k, v in unwrapped_model.state_dict().items()}
 
-            drop_prefix = "speaker_encoder"
-            keys_to_drop = [k for k in state_dict.keys() if k.startswith(drop_prefix)]
-            for k in keys_to_drop:
-                del state_dict[k]
+            # NOTE: speaker_encoder weights are intentionally kept in the
+            # checkpoint so that training can be resumed without losing
+            # the encoder (which would crash on the next forward pass).
+            # The final export step can strip them if a smaller artifact
+            # is desired.
 
             weight = state_dict['talker.model.codec_embedding.weight']
             state_dict['talker.model.codec_embedding.weight'][3000] = target_speaker_embedding[0].detach().to(weight.device).to(weight.dtype)
