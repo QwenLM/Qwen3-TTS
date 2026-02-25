@@ -46,6 +46,14 @@ from transformers.utils.hub import cached_file
 from ..rope_utils import patch_rope_init_functions
 patch_rope_init_functions()
 
+# CRITICAL: Verify that the patch was successfully applied
+# This assertion will catch silent failures in transformers 5.x
+assert "default" in ROPE_INIT_FUNCTIONS, (
+    "ERROR: RoPE 'default' type not registered! The patch_rope_init_functions() call failed. "
+    "This will cause silence in transformers 5.x. "
+    f"Available types: {list(ROPE_INIT_FUNCTIONS.keys())}"
+)
+
 from ...inference.qwen3_tts_tokenizer import Qwen3TTSTokenizer
 from .configuration_qwen3_tts import (Qwen3TTSConfig,
                                       Qwen3TTSSpeakerEncoderConfig,
