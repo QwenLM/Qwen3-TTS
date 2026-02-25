@@ -115,7 +115,7 @@ class Qwen3TTSModel:
                 f"AutoModel returned {type(model)}, expected Qwen3TTSForConditionalGeneration. "
             )
 
-        processor = AutoProcessor.from_pretrained(pretrained_model_name_or_path, fix_mistral_regex=True,)
+        processor = AutoProcessor.from_pretrained(pretrained_model_name_or_path, **kwargs)
 
         generate_defaults = model.generate_config
         return cls(model=model, processor=processor, generate_defaults=generate_defaults)
