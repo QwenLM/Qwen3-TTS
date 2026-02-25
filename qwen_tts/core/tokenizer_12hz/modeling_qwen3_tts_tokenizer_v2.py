@@ -39,7 +39,16 @@ from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS, PreTrainedModel
 from transformers.processing_utils import Unpack
 from transformers.utils import ModelOutput, auto_docstring, logging
 from transformers.utils.deprecation import deprecate_kwarg
-from transformers.utils.generic import check_model_inputs
+
+from ..rope_utils import patch_rope_init_functions
+patch_rope_init_functions()
+
+# CRITICAL: Verify that the patch was successfully applied
+assert "default" in ROPE_INIT_FUNCTIONS, (
+    "ERROR: RoPE 'default' type not registered! The patch_rope_init_functions() call failed. "
+    "This will cause silence in transformers 5.x. "
+    f"Available types: {list(ROPE_INIT_FUNCTIONS.keys())}"
+)
 
 from .configuration_qwen3_tts_tokenizer_v2 import (
     Qwen3TTSTokenizerV2Config,
@@ -496,7 +505,6 @@ class Qwen3TTSTokenizerV2DecoderTransformerModel(Qwen3TTSTokenizerV2DecoderPreTr
         # Initialize weights and apply final processing
         self.post_init()
 
-    @check_model_inputs()
     @auto_docstring
     def forward(
         self,

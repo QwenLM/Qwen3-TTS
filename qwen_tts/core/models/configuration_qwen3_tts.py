@@ -254,8 +254,6 @@ class Qwen3TTSTalkerCodePredictorConfig(PretrainedConfig):
             ]
         layer_type_validation(self.layer_types)
         self.num_code_groups = num_code_groups
-
-
 class Qwen3TTSTalkerConfig(PretrainedConfig):
     r"""
     This is the configuration class to store the configuration of a [`Qwen3TTSTalkerModel`]. It is used to instantiate a

@@ -15,12 +15,13 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
 ]
 license = { text = "Apache-2.0" }
 authors = [{ name = "Alibaba Qwen Team" }]
 
 dependencies = [
-  "transformers==4.57.3",
+  "transformers>=4.36.0,<5.0.0",  # transformers 5.x has incompatible changes that degrade audio quality
   "accelerate==1.12.0",
   "gradio",
   "librosa",
