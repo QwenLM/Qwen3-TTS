@@ -891,7 +891,12 @@ class Qwen3TTSTokenizerV2Decoder(Qwen3TTSTokenizerV2DecoderPreTrainedModel):
             context_size = left_context_size if start_index - left_context_size > 0 else start_index
             codes_chunk = codes[..., start_index - context_size : end_index]
             wav_chunk = self(codes_chunk)
-            wavs.append(wav_chunk[..., context_size * self.total_upsample :])
+            # The causal decoder may produce fewer samples than context_size * total_upsample
+            # due to implicit delays in causal convolutions. Taking the last sample_count samples
+            # from wav_chunk is more robust than slicing from a fixed offset, which can
+            # over-remove samples when the decoder output is shorter than expected.
+            sample_count = min((end_index - start_index) * self.total_upsample, wav_chunk.shape[-1])
+            wavs.append(wav_chunk[..., -sample_count:])
             start_index = end_index
         return torch.cat(wavs, dim=-1)
 
