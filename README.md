@@ -112,8 +112,26 @@ conda create -n qwen3-tts python=3.12 -y
 conda activate qwen3-tts
 ```
 
-then run:
+**Important:** Before installing `qwen-tts`, you need to install PyTorch with CUDA support. The `qwen-tts` package does not include PyTorch in its dependencies to avoid installing the CPU-only version from PyPI. This way, if you install PyTorch with CUDA first, it won't be reinstalled when installing `qwen-tts`, saving bandwidth and avoiding conflicts.
 
+Install PyTorch with CUDA support first:
+
+For CUDA 12.1:
+```bash
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+```
+
+For CUDA 11.8:
+```bash
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+```
+
+For CPU-only (not recommended for inference):
+```bash
+pip install torch torchvision torchaudio
+```
+
+Then install qwen-tts (PyTorch will not be reinstalled if already present):
 ```bash
 pip install -U qwen-tts
 ```
