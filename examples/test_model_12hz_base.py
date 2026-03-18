@@ -19,19 +19,26 @@ import torch
 import soundfile as sf
 
 from qwen_tts import Qwen3TTSModel
+from qwen_tts.core.device_utils import (
+    get_optimal_device,
+    get_attention_implementation,
+    device_synchronize,
+    get_device_info,
+    get_model_path,
+)
 
 
 def ensure_dir(d: str):
     os.makedirs(d, exist_ok=True)
 
 
-def run_case(tts: Qwen3TTSModel, out_dir: str, case_name: str, call_fn):
-    torch.cuda.synchronize()
+def run_case(tts: Qwen3TTSModel, out_dir: str, case_name: str, call_fn, device: str):
+    device_synchronize(device)
     t0 = time.time()
 
     wavs, sr = call_fn()
 
-    torch.cuda.synchronize()
+    device_synchronize(device)
     t1 = time.time()
     print(f"[{case_name}] time: {t1 - t0:.3f}s, n_wavs={len(wavs)}, sr={sr}")
 
@@ -40,16 +47,21 @@ def run_case(tts: Qwen3TTSModel, out_dir: str, case_name: str, call_fn):
 
 
 def main():
-    device = "cuda:0"
-    MODEL_PATH = "Qwen/Qwen3-TTS-12Hz-1.7B-Base/"
+    device = get_optimal_device()
+    print(f"Using device: {get_device_info(device)}\n")
+
+    # Use local model if available, otherwise download from HuggingFace
+    model_path = get_model_path("Qwen/Qwen3-TTS-12Hz-1.7B-Base")
     OUT_DIR = "qwen3_tts_test_voice_clone_output_wav"
     ensure_dir(OUT_DIR)
 
+    attn_impl = get_attention_implementation(device)
+
     tts = Qwen3TTSModel.from_pretrained(
-        MODEL_PATH,
+        model_path,
         device_map=device,
         dtype=torch.bfloat16,
-        attn_implementation="flash_attention_2",
+        attn_implementation=attn_impl,
     )
 
     # Reference audio(s)
@@ -102,6 +114,7 @@ def main():
                 x_vector_only_mode=xvec_only,
                 **common_gen_kwargs,
             ),
+            device,
         )
 
         # Case 1b: prompt single + synth single, via create_voice_clone_prompt
@@ -121,6 +134,7 @@ def main():
         run_case(
             tts, OUT_DIR, f"case1_promptSingle_synSingle_promptThenGen_{mode_tag}",
             _case1b,
+            device,
         )
 
         # Case 2: prompt single + synth batch, direct
@@ -134,6 +148,7 @@ def main():
                 x_vector_only_mode=xvec_only,
                 **common_gen_kwargs,
             ),
+            device,
         )
 
         # Case 2b: prompt single + synth batch, via create_voice_clone_prompt
@@ -153,6 +168,7 @@ def main():
         run_case(
             tts, OUT_DIR, f"case2_promptSingle_synBatch_promptThenGen_{mode_tag}",
             _case2b,
+            device,
         )
 
         # Case 3: prompt batch + synth batch, direct
@@ -166,6 +182,7 @@ def main():
                 x_vector_only_mode=[xvec_only, xvec_only],
                 **common_gen_kwargs,
             ),
+            device,
         )
 
         # Case 3b: prompt batch + synth batch, via create_voice_clone_prompt
@@ -185,6 +202,7 @@ def main():
         run_case(
             tts, OUT_DIR, f"case3_promptBatch_synBatch_promptThenGen_{mode_tag}",
             _case3b,
+            device,
         )
 
 

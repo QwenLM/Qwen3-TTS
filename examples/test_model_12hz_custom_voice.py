@@ -13,26 +13,43 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 import time
 import torch
 import soundfile as sf
 
 from qwen_tts import Qwen3TTSModel
+from qwen_tts.core.device_utils import (
+    get_optimal_device,
+    get_attention_implementation,
+    device_synchronize,
+    get_device_info,
+    get_model_path,
+)
 
 
 def main():
-    device = "cuda:0"
-    MODEL_PATH = "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice/"
+    # Setup output directory
+    output_dir = "example_output"
+    os.makedirs(output_dir, exist_ok=True)
+
+    device = get_optimal_device()
+    print(f"Using device: {get_device_info(device)}\n")
+
+    # Use local model if available, otherwise download from HuggingFace
+    model_path = get_model_path("Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice")
+
+    attn_impl = get_attention_implementation(device)
 
     tts = Qwen3TTSModel.from_pretrained(
-        MODEL_PATH,
+        model_path,
         device_map=device,
         dtype=torch.bfloat16,
-        attn_implementation="flash_attention_2",
+        attn_implementation=attn_impl,
     )
 
     # -------- Single (with instruct) --------
-    torch.cuda.synchronize()
+    device_synchronize(device)
     t0 = time.time()
 
     wavs, sr = tts.generate_custom_voice(
@@ -42,11 +59,11 @@ def main():
         instruct="用特别愤怒的语气说",
     )
 
-    torch.cuda.synchronize()
+    device_synchronize(device)
     t1 = time.time()
     print(f"[CustomVoice Single] time: {t1 - t0:.3f}s")
 
-    sf.write("qwen3_tts_test_custom_single.wav", wavs[0], sr)
+    sf.write(os.path.join(output_dir, "qwen3_tts_test_custom_single.wav"), wavs[0], sr)
 
     # -------- Batch (some empty instruct) --------
     texts = ["其实我真的有发现，我是一个特别善于观察别人情绪的人。", "She said she would be here by noon."]
@@ -54,7 +71,7 @@ def main():
     speakers = ["Vivian", "Ryan"]
     instructs = ["", "Very happy."]
 
-    torch.cuda.synchronize()
+    device_synchronize(device)
     t0 = time.time()
 
     wavs, sr = tts.generate_custom_voice(
@@ -65,12 +82,12 @@ def main():
         max_new_tokens=2048,
     )
 
-    torch.cuda.synchronize()
+    device_synchronize(device)
     t1 = time.time()
     print(f"[CustomVoice Batch] time: {t1 - t0:.3f}s")
 
     for i, w in enumerate(wavs):
-        sf.write(f"qwen3_tts_test_custom_batch_{i}.wav", w, sr)
+        sf.write(os.path.join(output_dir, f"qwen3_tts_test_custom_batch_{i}.wav"), w, sr)
 
 
 if __name__ == "__main__":
