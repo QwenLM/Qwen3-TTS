@@ -1,0 +1,18 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown: # applies only to version-updates (not security-updates)
+      default-days: 7
+      semver-minor: 14 # wait 14 days before applying minor updates
+      semver-major: 28
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+      semver-minor: 14
+      semver-major: 28

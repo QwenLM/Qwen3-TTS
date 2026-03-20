@@ -20,8 +20,8 @@ license = { text = "Apache-2.0" }
 authors = [{ name = "Alibaba Qwen Team" }]
 
 dependencies = [
-  "transformers==4.57.3",
-  "accelerate==1.12.0",
+  "transformers>=4.57.3",
+  "accelerate>=1.12.0",
   "gradio",
   "librosa",
   "torchaudio",
