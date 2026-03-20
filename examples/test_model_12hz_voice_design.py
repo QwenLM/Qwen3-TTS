@@ -22,7 +22,7 @@ from qwen_tts import Qwen3TTSModel
 
 def main():
     device = "cuda:0"
-    MODEL_PATH = "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign/"
+    MODEL_PATH = "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"
 
     tts = Qwen3TTSModel.from_pretrained(
         MODEL_PATH,
