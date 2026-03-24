@@ -1,0 +1,6 @@
+# Cargo configuration for qwen3-tts-rs
+
+# ARM aarch64: Enable fp16 target feature for half-precision float support
+# Required by the gemm crate for matrix operations on ARM processors
+[target.aarch64-unknown-linux-gnu]
+rustflags = ["-C", "target-feature=+fp16"]
