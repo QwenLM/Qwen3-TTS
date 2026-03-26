@@ -259,8 +259,8 @@ class Qwen3TTSModel:
                 raise TypeError(f"Unsupported audio input type: {type(a)}")
         for i, a in enumerate(out):
             if a[0].ndim > 1:
-                a[0] = np.mean(a[0], axis=-1).astype(np.float32)
-                out[i] = (a[0], a[1])
+                a_s = np.mean(a[0], axis=-1).astype(np.float32)
+                out[i] = (a_s, a[1])
         return out
 
     def _ensure_list(self, x: MaybeList) -> List[Any]:
