@@ -1339,6 +1339,16 @@ During evaluation, we ran inference for all models with `dtype=torch.bfloat16` a
 </details>
 
 
+## Community Projects
+
+Projects built by the community on top of Qwen3-TTS:
+
+| Project | Description |
+|---------|-------------|
+| [qwen3-tts-spanish-voices](https://github.com/alblez/qwen3-tts-spanish-voices) | 14 curated Spanish voices (12 clones + 2 designs) covering Spain, Mexico, Argentina, Chile, and Colombia. CLI tool, runs locally on Apple Silicon via MLX. |
+
+> Have a project built on Qwen3-TTS? Feel free to open a PR to add it here.
+
 ## Citation
 
 If you find our paper and code useful in your research, please consider giving a star :star: and citation :pencil: :)
