@@ -1817,6 +1817,10 @@ class Qwen3TTSForConditionalGeneration(Qwen3TTSPreTrainedModel, GenerationMixin)
         super().__init__(config)
         self.config = config
 
+        effective_dtype = getattr(self.config.talker_config, "dtype", None) or getattr(self.config, "dtype", None)
+        if effective_dtype is not None:
+            self.config.talker_config.code_predictor_config.dtype = effective_dtype
+
         self.talker = Qwen3TTSTalkerForConditionalGeneration(self.config.talker_config)
 
         if config.tts_model_type == "base":
