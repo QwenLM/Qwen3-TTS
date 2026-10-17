@@ -1,13 +1,13 @@
 ## Fine Tuning Qwen3-TTS-12Hz-1.7B/0.6B-Base
 
-The Qwen3-TTS-12Hz-1.7B/0.6B-Base model series currently supports single-speaker fine-tuning. Please run `pip install qwen-tts` first, then run the command below:
+The Qwen3-TTS-12Hz-1.7B/0.6B-Base model series supports both single-speaker and multi-speaker fine-tuning. Please run `pip install qwen-tts` first, then run the command below:
 
 ```
 git clone https://github.com/QwenLM/Qwen3-TTS.git
 cd Qwen3-TTS/finetuning
 ```
 
-Then follow the steps below to complete the entire fine-tuning workflow. Multi-speaker fine-tuning and other advanced fine-tuning features will be supported in future releases.
+Then follow the steps below to complete the entire fine-tuning workflow.
 
 ### 1) Input JSONL format
 
@@ -16,16 +16,23 @@ Prepare your training file as a JSONL (one JSON object per line). Each line must
 - `audio`: path to the target training audio (wav)
 - `text`: transcript corresponding to `audio`
 - `ref_audio`: path to the reference speaker audio (wav)
+- `speaker` *(optional)*: speaker identifier for multi-speaker fine-tuning (if omitted, defaults to `--speaker_name`)
 
-Example:
+Single-speaker example:
 ```jsonl
 {"audio":"./data/utt0001.wav","text":"其实我真的有发现，我是一个特别善于观察别人情绪的人。","ref_audio":"./data/ref.wav"}
 {"audio":"./data/utt0002.wav","text":"She said she would be here by noon.","ref_audio":"./data/ref.wav"}
 ```
 
+Multi-speaker example:
+```jsonl
+{"audio":"./data/spk1_utt0001.wav","text":"其实我真的有发现，我是一个特别善于观察别人情绪的人。","ref_audio":"./data/spk1_ref.wav","speaker":"speaker_1"}
+{"audio":"./data/spk2_utt0001.wav","text":"She said she would be here by noon.","ref_audio":"./data/spk2_ref.wav","speaker":"speaker_2"}
+```
+
 `ref_audio` recommendation:
-- Strongly recommended: use the same `ref_audio` for all samples.
-- Keeping `ref_audio` identical across the dataset usually improves speaker consistency and stability during generation.
+- Strongly recommended: use the same `ref_audio` for all samples of a given speaker.
+- Keeping `ref_audio` identical per speaker across the dataset usually improves speaker consistency and stability during generation.
 
 
 ### 2) Prepare data (extract `audio_codes`)

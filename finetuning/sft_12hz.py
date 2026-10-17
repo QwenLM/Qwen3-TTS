@@ -21,15 +21,18 @@ import shutil
 import torch
 from accelerate import Accelerator
 from dataset import TTSDataset
+from huggingface_hub import snapshot_download
 from qwen_tts.inference.qwen3_tts_model import Qwen3TTSModel
 from safetensors.torch import save_file
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from transformers import AutoConfig
 
-target_speaker_embedding = None
+target_speaker_embeddings = {}
+
+
 def train():
-    global target_speaker_embedding
+    global target_speaker_embeddings
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--init_model_path", type=str, default="Qwen/Qwen3-TTS-12Hz-1.7B-Base")
@@ -44,16 +47,17 @@ def train():
     accelerator = Accelerator(gradient_accumulation_steps=4, mixed_precision="bf16", log_with="tensorboard")
 
     MODEL_PATH = args.init_model_path
+    local_model_path = MODEL_PATH if os.path.exists(MODEL_PATH) else snapshot_download(MODEL_PATH)
 
     qwen3tts = Qwen3TTSModel.from_pretrained(
-        MODEL_PATH,
+        local_model_path,
         torch_dtype=torch.bfloat16,
         attn_implementation="flash_attention_2",
     )
-    config = AutoConfig.from_pretrained(MODEL_PATH)
+    config = AutoConfig.from_pretrained(local_model_path)
 
-    train_data = open(args.train_jsonl).readlines()
-    train_data = [json.loads(line) for line in train_data]
+    with open(args.train_jsonl, "r", encoding="utf-8") as f:
+        train_data = [json.loads(line) for line in f if line.strip()]
     dataset = TTSDataset(train_data, qwen3tts.processor, config)
     train_dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, collate_fn=dataset.collate_fn)
 
@@ -62,6 +66,8 @@ def train():
     model, optimizer, train_dataloader = accelerator.prepare(
         qwen3tts.model, optimizer, train_dataloader
     )
+
+    raw_model = accelerator.unwrap_model(model)
 
     num_epochs = args.num_epochs
     model.train()
@@ -73,42 +79,65 @@ def train():
                 input_ids = batch['input_ids']
                 codec_ids = batch['codec_ids']
                 ref_mels = batch['ref_mels']
+                ref_mel_lens = batch['ref_mel_lens']
+                speakers = batch['speakers']
                 text_embedding_mask = batch['text_embedding_mask']
                 codec_embedding_mask = batch['codec_embedding_mask']
                 attention_mask = batch['attention_mask']
                 codec_0_labels = batch['codec_0_labels']
                 codec_mask = batch['codec_mask']
 
-                speaker_embedding = model.speaker_encoder(ref_mels.to(model.device).to(model.dtype)).detach()
-                if target_speaker_embedding is None:
-                    target_speaker_embedding = speaker_embedding
+                if (ref_mel_lens == ref_mel_lens[0]).all():
+                    speaker_embedding = raw_model.speaker_encoder(
+                        ref_mels[:, :ref_mel_lens[0], :].to(raw_model.device).to(raw_model.dtype)
+                    ).detach()
+                else:
+                    spk_emb_list = []
+                    for i, mel_len in enumerate(ref_mel_lens):
+                        emb = raw_model.speaker_encoder(
+                            ref_mels[i:i+1, :mel_len, :].to(raw_model.device).to(raw_model.dtype)
+                        ).detach()
+                        spk_emb_list.append(emb)
+                    speaker_embedding = torch.cat(spk_emb_list, dim=0)
+
+                for i, spk in enumerate(speakers):
+                    spk_key = spk if spk is not None else args.speaker_name
+                    if spk_key not in target_speaker_embeddings:
+                        target_speaker_embeddings[spk_key] = speaker_embedding[i].detach().cpu()
 
                 input_text_ids = input_ids[:, :, 0]
                 input_codec_ids = input_ids[:, :, 1]
 
-                input_text_embedding = model.talker.model.text_embedding(input_text_ids) * text_embedding_mask
-                input_codec_embedding = model.talker.model.codec_embedding(input_codec_ids) * codec_embedding_mask
+                input_text_embedding = (
+                    raw_model.talker.text_projection(raw_model.talker.model.text_embedding(input_text_ids))
+                    * text_embedding_mask
+                )
+                input_codec_embedding = raw_model.talker.model.codec_embedding(input_codec_ids) * codec_embedding_mask
                 input_codec_embedding[:, 6, :] = speaker_embedding
 
                 input_embeddings = input_text_embedding + input_codec_embedding
 
                 for i in range(1, 16):
-                    codec_i_embedding = model.talker.code_predictor.get_input_embeddings()[i - 1](codec_ids[:, :, i])
+                    codec_i_embedding = raw_model.talker.code_predictor.get_input_embeddings()[i - 1](codec_ids[:, :, i])
                     codec_i_embedding = codec_i_embedding * codec_mask.unsqueeze(-1)
                     input_embeddings = input_embeddings + codec_i_embedding
 
-                outputs = model.talker(
+                outputs = raw_model.talker(
                     inputs_embeds=input_embeddings[:, :-1, :],
                     attention_mask=attention_mask[:, :-1],
-                    labels=codec_0_labels[:, 1:],
+                    shift_labels=codec_0_labels[:, 1:].contiguous(),
                     output_hidden_states=True
                 )
 
                 hidden_states = outputs.hidden_states[0][-1]
-                talker_hidden_states = hidden_states[codec_mask[:, :-1]]
+                pred_mask = torch.zeros_like(codec_mask)
+                pred_mask[:, :-1] = codec_mask[:, 1:]
+                talker_hidden_states = hidden_states[pred_mask[:, :-1]]
                 talker_codec_ids = codec_ids[codec_mask]
 
-                sub_talker_logits, sub_talker_loss = model.talker.forward_sub_talker_finetune(talker_codec_ids, talker_hidden_states)
+                sub_talker_logits, sub_talker_loss = raw_model.talker.forward_sub_talker_finetune(
+                    talker_codec_ids, talker_hidden_states
+                )
 
                 loss = outputs.loss + 0.3 * sub_talker_loss
 
@@ -125,20 +154,21 @@ def train():
 
         if accelerator.is_main_process:
             output_dir = os.path.join(args.output_model_path, f"checkpoint-epoch-{epoch}")
-            shutil.copytree(MODEL_PATH, output_dir, dirs_exist_ok=True)
+            shutil.copytree(local_model_path, output_dir, dirs_exist_ok=True)
 
-            input_config_file = os.path.join(MODEL_PATH, "config.json")
+            input_config_file = os.path.join(local_model_path, "config.json")
             output_config_file = os.path.join(output_dir, "config.json")
             with open(input_config_file, 'r', encoding='utf-8') as f:
                 config_dict = json.load(f)
             config_dict["tts_model_type"] = "custom_voice"
             talker_config = config_dict.get("talker_config", {})
-            talker_config["spk_id"] = {
-                args.speaker_name: 3000
-            }
-            talker_config["spk_is_dialect"] = {
-                args.speaker_name: False
-            }
+
+            sorted_speakers = sorted(target_speaker_embeddings.keys())
+            spk_id_map = {spk_name: 3000 + idx for idx, spk_name in enumerate(sorted_speakers)}
+            spk_is_dialect_map = {spk_name: False for spk_name in sorted_speakers}
+
+            talker_config["spk_id"] = spk_id_map
+            talker_config["spk_is_dialect"] = spk_is_dialect_map
             config_dict["talker_config"] = talker_config
 
             with open(output_config_file, 'w', encoding='utf-8') as f:
@@ -153,7 +183,10 @@ def train():
                 del state_dict[k]
 
             weight = state_dict['talker.model.codec_embedding.weight']
-            state_dict['talker.model.codec_embedding.weight'][3000] = target_speaker_embedding[0].detach().to(weight.device).to(weight.dtype)
+            for spk_name, spk_idx in spk_id_map.items():
+                state_dict['talker.model.codec_embedding.weight'][spk_idx] = (
+                    target_speaker_embeddings[spk_name].to(weight.device).to(weight.dtype)
+                )
             save_path = os.path.join(output_dir, "model.safetensors")
             save_file(state_dict, save_path)
 

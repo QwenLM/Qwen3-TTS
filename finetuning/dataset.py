@@ -126,6 +126,8 @@ class TTSDataset(Dataset):
         language        = item.get('language','Auto')
         ref_audio_path  = item['ref_audio']
 
+        speaker         = item.get('speaker', None)
+
         text = self._build_assistant_text(text)
         text_ids = self._tokenize_texts(text)
 
@@ -140,7 +142,8 @@ class TTSDataset(Dataset):
         return {
             "text_ids": text_ids[:,:-5],    # 1 , t
             "audio_codes":audio_codes,      # t, 16
-            "ref_mel":ref_mel
+            "ref_mel":ref_mel,
+            "speaker":speaker
         }
         
     def collate_fn(self, batch):
@@ -203,12 +206,20 @@ class TTSDataset(Dataset):
             codec_mask[i,   8+text_ids_len-1:8+text_ids_len-1+codec_ids_len] = True
             attention_mask[i, :8+text_ids_len+codec_ids_len] = True
         
-        ref_mels = [data['ref_mel'] for data in batch]
-        ref_mels = torch.cat(ref_mels,dim=0)
+        ref_mels_list = [data['ref_mel'] for data in batch]
+        ref_mel_lens = torch.tensor([m.shape[1] for m in ref_mels_list], dtype=torch.long)
+        max_mel_len = int(ref_mel_lens.max().item())
+        ref_mels = torch.zeros((b, max_mel_len, ref_mels_list[0].shape[2]), dtype=ref_mels_list[0].dtype)
+        for i, m in enumerate(ref_mels_list):
+            ref_mels[i, :m.shape[1], :] = m[0]
+
+        speakers = [data.get('speaker', None) for data in batch]
 
         return {
             'input_ids':input_ids,
             'ref_mels':ref_mels,
+            'ref_mel_lens':ref_mel_lens,
+            'speakers':speakers,
             'attention_mask':attention_mask,
             'text_embedding_mask':text_embedding_mask.unsqueeze(-1),
             'codec_embedding_mask':codec_embedding_mask.unsqueeze(-1),
