@@ -156,6 +156,25 @@ class Qwen3TTSTokenizerV2DecoderPreTrainedModel(PreTrainedModel):
     _supports_attention_backend = True
 
 
+def _compute_default_rope_parameters(config: object, device: object = None, **kwargs: object):
+    """4.57 identity RoPE init(transformers>=5 removed;recreated for compat)."""
+    import torch
+
+    cfg = config
+    base = getattr(cfg, "rope_theta", 10000.0)
+    head_dim = getattr(cfg, "head_dim", None) or cfg.hidden_size // cfg.num_attention_heads  # type: ignore[attr-defined]
+    dim = int(head_dim * getattr(cfg, "partial_rotary_factor", 1.0))
+    # CPU 物化再搬移——init_empty_weights(meta)上下文中裸 arange 会落在 meta 设备,
+    # 复制出 meta 即 NotImplementedError;显式 cpu 创建不受该上下文影响。
+    inv = torch.arange(0, dim, 2, dtype=torch.int64, device="cpu").float()
+    if device is not None:
+        inv = inv.to(device)
+    return 1.0 / (base ** (inv / dim)), 1.0
+
+
+ROPE_INIT_FUNCTIONS.setdefault("default", _compute_default_rope_parameters)
+
+
 class Qwen3TTSTokenizerV2CausalConvNet(nn.Module):
     def __init__(
         self,
@@ -252,7 +271,7 @@ class Qwen3TTSTokenizerV2DecoderRotatoryEmbedding(nn.Module):
         if hasattr(config, "rope_scaling") and isinstance(config.rope_scaling, dict):
             self.rope_type = config.rope_scaling.get("rope_type", config.rope_scaling.get("type"))
         else:
-            self.rope_type = "default"
+            self.rope_type = "default"  # identity init shim registered below(transformers>=5)
         self.max_seq_len_cached = config.max_position_embeddings
         self.original_max_seq_len = config.max_position_embeddings
 
@@ -496,7 +515,7 @@ class Qwen3TTSTokenizerV2DecoderTransformerModel(Qwen3TTSTokenizerV2DecoderPreTr
         # Initialize weights and apply final processing
         self.post_init()
 
-    @check_model_inputs()
+    @check_model_inputs
     @auto_docstring
     def forward(
         self,
@@ -536,9 +555,8 @@ class Qwen3TTSTokenizerV2DecoderTransformerModel(Qwen3TTSTokenizerV2DecoderPreTr
             # Prepare mask arguments
             mask_kwargs = {
                 "config": self.config,
-                "input_embeds": inputs_embeds,
+                "inputs_embeds": inputs_embeds,  # transformers>=5 rename
                 "attention_mask": attention_mask,
-                "cache_position": cache_position,
                 "past_key_values": past_key_values,
                 "position_ids": position_ids,
             }

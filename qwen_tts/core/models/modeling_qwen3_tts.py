@@ -308,6 +308,25 @@ class SqueezeExcitationRes2NetBlock(nn.Module):
         return hidden_state + residual
 
 
+def _compute_default_rope_parameters(config: object, device: object = None, **kwargs: object):
+    """4.57 identity RoPE init(transformers>=5 removed;recreated for compat)."""
+    import torch
+
+    cfg = config
+    base = getattr(cfg, "rope_theta", 10000.0)
+    head_dim = getattr(cfg, "head_dim", None) or cfg.hidden_size // cfg.num_attention_heads  # type: ignore[attr-defined]
+    dim = int(head_dim * getattr(cfg, "partial_rotary_factor", 1.0))
+    # CPU 物化再搬移——init_empty_weights(meta)上下文中裸 arange 会落在 meta 设备,
+    # 复制出 meta 即 NotImplementedError;显式 cpu 创建不受该上下文影响。
+    inv = torch.arange(0, dim, 2, dtype=torch.int64, device="cpu").float()
+    if device is not None:
+        inv = inv.to(device)
+    return 1.0 / (base ** (inv / dim)), 1.0
+
+
+ROPE_INIT_FUNCTIONS.setdefault("default", _compute_default_rope_parameters)
+
+
 class Qwen3TTSSpeakerEncoder(torch.nn.Module):
     """An implementation of the speaker embedding model in a paper.
     "ECAPA-TDNN: Emphasized Channel Attention, Propagation and Aggregation in
@@ -530,7 +549,7 @@ class Qwen3TTSTalkerRotaryEmbedding(nn.Module):
         if hasattr(config, "rope_scaling") and config.rope_scaling is not None:
             self.rope_type = config.rope_scaling.get("rope_type", config.rope_scaling.get("type"))
         else:
-            self.rope_type = "default"
+            self.rope_type = "default"  # identity init shim registered below(transformers>=5)
         self.max_seq_len_cached = config.max_position_embeddings
         self.original_max_seq_len = config.max_position_embeddings
 
@@ -565,7 +584,7 @@ class Qwen3TTSRotaryEmbedding(nn.Module):
         if hasattr(config, "rope_scaling") and config.rope_scaling is not None:
             self.rope_type = config.rope_scaling.get("rope_type", config.rope_scaling.get("type"))
         else:
-            self.rope_type = "default"
+            self.rope_type = "default"  # identity init shim registered below(transformers>=5)
         self.max_seq_len_cached = config.max_position_embeddings
         self.original_max_seq_len = config.max_position_embeddings
 
@@ -1096,9 +1115,8 @@ class Qwen3TTSTalkerCodePredictorModel(Qwen3TTSPreTrainedModel):
             # Prepare mask arguments
             mask_kwargs = {
                 "config": self.config,
-                "input_embeds": inputs_embeds,
+                "inputs_embeds": inputs_embeds,  # transformers>=5 rename
                 "attention_mask": attention_mask,
-                "cache_position": cache_position,
                 "past_key_values": past_key_values,
             }
             # Create the masks
@@ -1510,9 +1528,8 @@ class Qwen3TTSTalkerModel(Qwen3TTSTalkerTextPreTrainedModel):
         mask_function = create_causal_mask if self.config.sliding_window is None else create_sliding_window_causal_mask
         causal_mask = mask_function(
             config=self.config,
-            input_embeds=inputs_embeds,
+            inputs_embeds=inputs_embeds,  # transformers>=5 rename
             attention_mask=attention_mask,
-            cache_position=cache_position,
             past_key_values=past_key_values,
             position_ids=text_position_ids,
         )
