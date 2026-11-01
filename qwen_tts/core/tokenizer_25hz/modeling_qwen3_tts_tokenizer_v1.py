@@ -1427,7 +1427,7 @@ class Qwen3TTSTokenizerV1Model(Qwen3TTSTokenizerV1PreTrainedModel):
             pretrained_model_name_or_path,
             "campplus.onnx",
             subfolder=kwargs.pop("subfolder", None),
-            cache_dir=kwargs.pop("cache_dir", None),
+            cache_dir=cache_dir,
             force_download=kwargs.pop("force_download", False),
             proxies=kwargs.pop("proxies", None),
             resume_download=kwargs.pop("resume_download", None),
