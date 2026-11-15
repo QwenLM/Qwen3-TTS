@@ -242,6 +242,9 @@ class Qwen3TTSTalkerCodePredictorConfig(PretrainedConfig):
         # BC: if there is a 'type' field, move it to 'rope_type'.
         if self.rope_scaling is not None and "type" in self.rope_scaling:
             self.rope_scaling["rope_type"] = self.rope_scaling["type"]
+        # transformers>=5: 'default' rope key removed(identity = no scaling)
+        if self.rope_scaling and self.rope_scaling.get("rope_type") == "default":
+            self.rope_scaling = None
         rope_config_validation(self)
 
         self.layer_types = layer_types
@@ -391,6 +394,9 @@ class Qwen3TTSTalkerConfig(PretrainedConfig):
         num_code_groups=32,
         text_hidden_size=2048,
         codec_eos_token_id=4198,
+        # transformers>=5: PretrainedConfig no longer defaults token-id attrs;
+        # embedding padding_idx (modeling 1021/1433) reads this at build time.
+        pad_token_id=None,
         codec_think_id=4202,
         codec_nothink_id=4203,
         codec_think_bos_id=4204,
@@ -440,6 +446,7 @@ class Qwen3TTSTalkerConfig(PretrainedConfig):
         self.num_code_groups = num_code_groups
         self.text_hidden_size = text_hidden_size
         self.codec_eos_token_id = codec_eos_token_id
+        self.pad_token_id = pad_token_id  # transformers>=5: attr default dropped,须显式落位
         self.codec_think_id = codec_think_id
         self.codec_language_id = codec_language_id
         self.codec_nothink_id = codec_nothink_id
