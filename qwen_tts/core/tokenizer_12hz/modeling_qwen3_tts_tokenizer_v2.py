@@ -919,8 +919,10 @@ class Qwen3TTSTokenizerV2Encoder(MimiModel):
         super().__init__(config)
         self.config = config
 
-        self.upsample = None
-        self.decoder_transformer = None
+        # transformers 5.23: MimiModel.upsample/decoder_transformer are read-only
+        # deprecated properties delegating into self.decoder; assigning them raises
+        # AttributeError (property has no setter). V2 only needs the encode path —
+        # dropping the decoder (plain attribute, still assignable) is the fix.
         self.decoder = None
 
         self.post_init()
