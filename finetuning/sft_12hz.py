@@ -125,10 +125,16 @@ def train():
 
         if accelerator.is_main_process:
             output_dir = os.path.join(args.output_model_path, f"checkpoint-epoch-{epoch}")
-            shutil.copytree(MODEL_PATH, output_dir, dirs_exist_ok=True)
+            # write into a temporary dir and rename it at the end, so an interrupted save
+            # never leaves a loadable checkpoint that still holds the base weights
+            tmp_dir = output_dir + ".tmp"
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            # the top-level model.safetensors is written below, don't copy the base one
+            # (speech_tokenizer/model.safetensors is still copied)
+            shutil.copytree(MODEL_PATH, tmp_dir, ignore=lambda d, names: ["model.safetensors"] if d == MODEL_PATH else [])
 
             input_config_file = os.path.join(MODEL_PATH, "config.json")
-            output_config_file = os.path.join(output_dir, "config.json")
+            output_config_file = os.path.join(tmp_dir, "config.json")
             with open(input_config_file, 'r', encoding='utf-8') as f:
                 config_dict = json.load(f)
             config_dict["tts_model_type"] = "custom_voice"
@@ -154,8 +160,13 @@ def train():
 
             weight = state_dict['talker.model.codec_embedding.weight']
             state_dict['talker.model.codec_embedding.weight'][3000] = target_speaker_embedding[0].detach().to(weight.device).to(weight.dtype)
-            save_path = os.path.join(output_dir, "model.safetensors")
+            save_path = os.path.join(tmp_dir, "model.safetensors")
             save_file(state_dict, save_path)
+            # free the CPU copy now, otherwise it is still alive while the next save builds a new one
+            del state_dict, weight
+
+            shutil.rmtree(output_dir, ignore_errors=True)
+            os.replace(tmp_dir, output_dir)
 
 if __name__ == "__main__":
     train()
