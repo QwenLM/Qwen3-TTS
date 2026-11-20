@@ -122,10 +122,12 @@ def train():
                     codec_i_embedding = codec_i_embedding * codec_mask.unsqueeze(-1)
                     input_embeddings = input_embeddings + codec_i_embedding
 
+                # The talker computes its loss only when labels are given, and shifts them by one itself,
+                # so pass labels aligned with the inputs.
                 outputs = raw_model.talker(
                     inputs_embeds=input_embeddings[:, :-1, :],
                     attention_mask=attention_mask[:, :-1],
-                    shift_labels=codec_0_labels[:, 1:].contiguous(),
+                    labels=codec_0_labels[:, :-1],
                     output_hidden_states=True
                 )
 
