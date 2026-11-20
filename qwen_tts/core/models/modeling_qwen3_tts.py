@@ -1239,7 +1239,11 @@ class Qwen3TTSTalkerCodePredictorModelForConditionalGeneration(Qwen3TTSPreTraine
 
         loss = None
         if labels is not None:
-            loss = self.loss_function(logits=logits, labels=labels, vocab_size=self.config.vocab_size, **kwargs)
+            # logits[:, j] already predicts labels[:, j] (codebook j + 1), so pass them as shift_labels:
+            # with labels=, the causal LM loss would shift them once more and score head j against codebook j + 2.
+            loss = self.loss_function(
+                logits=logits, labels=None, shift_labels=labels.contiguous(), vocab_size=self.config.vocab_size, **kwargs
+            )
 
         return Qwen3TTSTalkerCodePredictorOutputWithPast(
             loss=loss,
