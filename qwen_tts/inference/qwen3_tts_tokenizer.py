@@ -86,6 +86,10 @@ class Qwen3TTSTokenizer:
 
         inst.feature_extractor = AutoFeatureExtractor.from_pretrained(pretrained_model_name_or_path)
         inst.model = AutoModel.from_pretrained(pretrained_model_name_or_path, **kwargs)
+        from .._transformers_compat import restore_mimi_full_attention, restore_rope_buffers
+
+        restore_rope_buffers(inst.model)
+        restore_mimi_full_attention(inst.model)
         inst.config = inst.model.config
 
         inst.device = getattr(inst.model, "device", None)

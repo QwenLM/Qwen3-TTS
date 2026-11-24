@@ -18,6 +18,10 @@
 qwen_tts: Qwen-TTS package.
 """
 
+from ._transformers_compat import patch_transformers_rope_registry
+
+patch_transformers_rope_registry()
+
 from .inference.qwen3_tts_model import Qwen3TTSModel, VoiceClonePromptItem
 from .inference.qwen3_tts_tokenizer import Qwen3TTSTokenizer
 

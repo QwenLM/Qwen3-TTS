@@ -1093,15 +1093,13 @@ class Qwen3TTSTalkerCodePredictorModel(Qwen3TTSPreTrainedModel):
 
         # It may already have been prepared by e.g. `generate`
         if not isinstance(causal_mask_mapping := attention_mask, dict):
-            # Prepare mask arguments
             mask_kwargs = {
                 "config": self.config,
-                "input_embeds": inputs_embeds,
+                "inputs_embeds": inputs_embeds,
                 "attention_mask": attention_mask,
-                "cache_position": cache_position,
                 "past_key_values": past_key_values,
+                "position_ids": position_ids,
             }
-            # Create the masks
             causal_mask_mapping = {
                 "full_attention": create_causal_mask(**mask_kwargs),
             }
@@ -1510,9 +1508,8 @@ class Qwen3TTSTalkerModel(Qwen3TTSTalkerTextPreTrainedModel):
         mask_function = create_causal_mask if self.config.sliding_window is None else create_sliding_window_causal_mask
         causal_mask = mask_function(
             config=self.config,
-            input_embeds=inputs_embeds,
+            inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
-            cache_position=cache_position,
             past_key_values=past_key_values,
             position_ids=text_position_ids,
         )
@@ -1661,6 +1658,15 @@ class Qwen3TTSTalkerForConditionalGeneration(Qwen3TTSTalkerTextPreTrainedModel, 
             config.vocab_size]` or -100 (see `input_ids` docstring). Tokens with indices set to `-100` are ignored
             (masked), the loss is only computed for the tokens with labels in `[0, ..., config.vocab_size]`.
         ```"""
+        if cache_position is None:
+            past_seen_tokens = past_key_values.get_seq_length() if past_key_values is not None else 0
+            sequence_length = inputs_embeds.shape[1] if inputs_embeds is not None else input_ids.shape[1]
+            cache_position = torch.arange(
+                past_seen_tokens,
+                past_seen_tokens + sequence_length,
+                device=(inputs_embeds if inputs_embeds is not None else input_ids).device,
+            )
+
         # Prefill
         if inputs_embeds is not None and inputs_embeds.shape[1] > 1:
             generation_step = -1
@@ -1888,6 +1894,9 @@ class Qwen3TTSForConditionalGeneration(Qwen3TTSPreTrainedModel, GenerationMixin)
             attn_implementation=requested_attn_implementation,
             **kwargs,
         )
+        from ..._transformers_compat import restore_rope_buffers
+
+        restore_rope_buffers(model)
         if not local_files_only and not os.path.isdir(pretrained_model_name_or_path):
             download_cache_dir = kwargs.get("cache_dir", cache_dir)
             download_revision = kwargs.get("revision", revision)

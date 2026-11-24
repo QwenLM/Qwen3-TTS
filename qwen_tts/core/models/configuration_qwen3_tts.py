@@ -12,8 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from transformers.configuration_utils import PretrainedConfig, layer_type_validation
-from transformers.modeling_rope_utils import rope_config_validation
+from transformers.configuration_utils import PretrainedConfig
 from transformers.utils import logging
 
 logger = logging.get_logger(__name__)
@@ -166,6 +165,9 @@ class Qwen3TTSTalkerCodePredictorConfig(PretrainedConfig):
     """
 
     model_type = "qwen3_tts_talker_code_predictor"
+    pad_token_id = None
+    bos_token_id = None
+    eos_token_id = None
     keys_to_ignore_at_inference = ["past_key_values"]
 
     # Default tensor parallel plan for base model `Qwen3TTSTalkerCodePredictor`
@@ -242,7 +244,8 @@ class Qwen3TTSTalkerCodePredictorConfig(PretrainedConfig):
         # BC: if there is a 'type' field, move it to 'rope_type'.
         if self.rope_scaling is not None and "type" in self.rope_scaling:
             self.rope_scaling["rope_type"] = self.rope_scaling["type"]
-        rope_config_validation(self)
+        self.standardize_rope_params()
+        self.validate_rope()
 
         self.layer_types = layer_types
         if self.layer_types is None:
@@ -252,7 +255,7 @@ class Qwen3TTSTalkerCodePredictorConfig(PretrainedConfig):
                 else "full_attention"
                 for i in range(self.num_hidden_layers)
             ]
-        layer_type_validation(self.layer_types)
+        self.validate_layer_type()
         self.num_code_groups = num_code_groups
 
 
@@ -348,6 +351,9 @@ class Qwen3TTSTalkerConfig(PretrainedConfig):
     """
 
     model_type = "qwen3_tts_talker"
+    pad_token_id = None
+    bos_token_id = None
+    eos_token_id = None
     keys_to_ignore_at_inference = ["past_key_values"]
 
     # Default tensor parallel plan for base model `Qwen3TTSTalker`
