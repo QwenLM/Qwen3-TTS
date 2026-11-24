@@ -15,7 +15,15 @@ _PATCHED = False
 def _default_rope_parameters(config, device=None, seq_len=None, layer_type=None):
     """Initialize the unscaled RoPE variant removed from the 5.x registry."""
     del seq_len, layer_type
-    base = config.rope_theta
+    base = getattr(config, "rope_theta", None)
+    if base is None:
+        rope_parameters = getattr(config, "rope_parameters", None)
+        if isinstance(rope_parameters, dict):
+            base = rope_parameters.get("rope_theta")
+        else:
+            base = getattr(rope_parameters, "rope_theta", None)
+    if base is None:
+        raise ValueError("RoPE theta requires config.rope_theta or config.rope_parameters['rope_theta'].")
     partial_rotary_factor = getattr(config, "partial_rotary_factor", 1.0)
     head_dim = getattr(config, "head_dim", None) or config.hidden_size // config.num_attention_heads
     dim = int(head_dim * partial_rotary_factor)
